@@ -13,6 +13,12 @@
 
 A web-based interface for managing multiple Claude Code sessions across Git worktrees.
 
+## Demo
+
+
+https://github.com/user-attachments/assets/a422e29d-eb0e-4cf2-bace-7f5e50f69cb5
+
+
 ## Features
 
 - 🖥️ **Browser-based Terminal**: Full terminal emulation using xterm.js
