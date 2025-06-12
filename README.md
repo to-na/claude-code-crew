@@ -1,5 +1,13 @@
 # Claude Code Crew
 
+[![npm version](https://badge.fury.io/js/claude-code-crew.svg)](https://www.npmjs.com/package/claude-code-crew)
+[![npm downloads](https://img.shields.io/npm/dm/claude-code-crew.svg)](https://www.npmjs.com/package/claude-code-crew)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js Version](https://img.shields.io/node/v/claude-code-crew.svg)](https://nodejs.org)
+[![GitHub Issues](https://img.shields.io/github/issues/to-na/claude-code-crew.svg)](https://github.com/to-na/claude-code-crew/issues)
+[![GitHub Stars](https://img.shields.io/github/stars/to-na/claude-code-crew.svg)](https://github.com/to-na/claude-code-crew/stargazers)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/to-na/claude-code-crew/pulls)
+
 A web-based interface for managing multiple Claude Code sessions across Git worktrees.
 
 ## Features
@@ -18,6 +26,8 @@ A web-based interface for managing multiple Claude Code sessions across Git work
 - Git repository (the tool manages Git worktrees)
 
 ## Installation
+
+[![npm install claude-code-crew](https://nodei.co/npm/claude-code-crew.png?mini=true)](https://npmjs.org/package/claude-code-crew)
 
 ```bash
 npm install -g claude-code-crew
