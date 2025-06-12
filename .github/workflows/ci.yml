@@ -94,7 +94,9 @@ jobs:
         echo "Package size: $(npm pack --dry-run 2>&1 | grep 'package size:' | awk '{print $3}')"
         echo "Files included: $(npm pack --dry-run 2>&1 | grep 'total files:' | awk '{print $3}')"
     
-    - name: Check global install simulation
+    - name: Check binary executable
       run: |
-        # Simulate what would happen during global install
-        node bin/claude-code-crew.js --help || echo "Binary check completed"
+        # Just verify the binary exists and is executable
+        test -f bin/claude-code-crew.js
+        test -x bin/claude-code-crew.js
+        echo "Binary check completed"
