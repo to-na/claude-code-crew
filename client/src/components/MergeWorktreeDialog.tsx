@@ -53,13 +53,16 @@ const MergeWorktreeDialog: React.FC<MergeWorktreeDialogProps> = ({
     setError(null);
 
     try {
-      await axios.post('/api/worktrees/merge', {
+      const response = await axios.post('/api/worktrees/merge', {
         sourceBranch,
         targetBranch,
         deleteAfterMerge,
         useRebase,
       });
       
+      console.log('[MergeDialog] Merge successful:', response.data);
+      
+      // Reset form and close dialog
       setSourceBranch('');
       setTargetBranch('');
       setDeleteAfterMerge(false);

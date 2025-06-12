@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 
 import { setupWebSocket } from './websocket/index.js';
 import { setupApiRoutes } from './api/index.js';
+import { SessionManager } from './services/sessionManager.js';
 
 dotenv.config();
 
@@ -23,11 +24,14 @@ const io = new Server(httpServer);
 // Middleware
 app.use(express.json());
 
-// API Routes (pass io for emitting events)
-setupApiRoutes(app, io);
+// Create shared SessionManager instance
+const sessionManager = new SessionManager();
 
-// WebSocket handling
-setupWebSocket(io);
+// API Routes (pass io and sessionManager)
+setupApiRoutes(app, io, sessionManager);
+
+// WebSocket handling (pass sessionManager)
+setupWebSocket(io, sessionManager);
 
 // Serve static files in production
 const publicPath = join(dirname(dirname(__dirname)), 'public');

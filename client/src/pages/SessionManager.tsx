@@ -45,7 +45,9 @@ const SessionManager: React.FC = () => {
     setSocket(newSocket);
 
     newSocket.on('worktrees:updated', (updatedWorktrees: Worktree[]) => {
-      setWorktrees(updatedWorktrees);
+      console.log('[Client] Received worktrees:updated event with', updatedWorktrees.length, 'worktrees');
+      // Force React to detect the change by creating a new array
+      setWorktrees([...updatedWorktrees]);
     });
 
     newSocket.on('session:created', (session: Session) => {
