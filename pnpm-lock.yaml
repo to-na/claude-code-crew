@@ -8,16 +8,28 @@ importers:
 
   .:
     dependencies:
-      '@claude-code-crew/client':
-        specifier: workspace:*
-        version: link:client
-      '@claude-code-crew/server':
-        specifier: workspace:*
-        version: link:server
+      dotenv:
+        specifier: ^16.3.1
+        version: 16.5.0
+      express:
+        specifier: ^4.18.2
+        version: 4.21.2
+      node-pty-prebuilt-multiarch:
+        specifier: ^0.10.1-pre.5
+        version: 0.10.1-pre.5
+      socket.io:
+        specifier: ^4.7.2
+        version: 4.8.1
     devDependencies:
+      '@types/node':
+        specifier: ^20.10.0
+        version: 20.19.0
       concurrently:
         specifier: ^8.2.2
         version: 8.2.2
+      typescript:
+        specifier: ^5.3.3
+        version: 5.8.3
 
   client:
     dependencies:
@@ -5136,7 +5148,7 @@ snapshots:
 
   wide-align@1.1.5:
     dependencies:
-      string-width: 1.0.2
+      string-width: 4.2.3
 
   wrap-ansi@7.0.0:
     dependencies:
