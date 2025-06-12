@@ -1,6 +1,6 @@
 {
   "name": "claude-code-crew",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Web UI based crew management for Claude Code sessions",
   "type": "module",
   "repository": {
@@ -22,22 +22,14 @@
     "claude-code-crew": "./bin/claude-code-crew.js"
   },
   "scripts": {
-    "dev": "pnpm run build && pnpm run start:single",
-    "dev:multi": "concurrently \"pnpm run --filter @claude-code-crew/server dev\" \"pnpm run --filter @claude-code-crew/client dev\"",
-    "dev:server": "pnpm run --filter @claude-code-crew/server dev",
-    "dev:client": "pnpm run --filter @claude-code-crew/client dev",
-    "build": "pnpm run -r build",
-    "postbuild": "cp -r client/dist server/dist/public",
-    "start": "pnpm run --filter @claude-code-crew/server start",
-    "start:single": "NODE_ENV=production pnpm run --filter @claude-code-crew/server start",
-    "prepublishOnly": "pnpm run build",
-    "test": "pnpm run -r test",
-    "test:run": "pnpm run -r test:run",
-    "test:coverage": "pnpm run -r test:coverage"
+    "start": "node server/dist/server/src/index.js",
+    "prepublishOnly": "echo 'Built version included in package'"
   },
   "dependencies": {
-    "@claude-code-crew/server": "workspace:*",
-    "@claude-code-crew/client": "workspace:*"
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "node-pty-prebuilt-multiarch": "^0.10.1-pre.5",
+    "socket.io": "^4.7.2"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

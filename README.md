@@ -1,86 +1,58 @@
-# Claude Code Crew - GUI Claude Code Session Manager
+# Claude Code Crew
 
-A browser-based interface for managing multiple Claude Code sessions across Git worktrees.
+A web-based interface for managing multiple Claude Code sessions across Git worktrees.
 
 ## Features
 
-- 🖥️ **Browser UI-based Terminal**: Full terminal emulation using xterm.js
+- 🖥️ **Browser-based Terminal**: Full terminal emulation using xterm.js
 - 🔄 **Real-time Session Management**: Monitor session states (busy/waiting/idle)
 - 🌳 **Git Worktree Operations**: Create, delete, and merge worktrees
 - 🔌 **WebSocket Communication**: Real-time updates and terminal streaming
 - 🎨 **Modern UI**: Built with React and Material-UI
+- 📱 **Single-port Architecture**: Everything runs on one port for easy deployment
 
-## Quick Start
+## Prerequisites
 
-### Local Development
-```bash
-cd claude-code-crew
-./start.sh
-```
-
-### Global Installation
-```bash
-# Install globally
-npm install -g claude-code-crew
-
-# Run in any git repository
-cd /path/to/your/git/repo
-claude-code-crew
-```
+- [Claude Code CLI](https://claude.ai/code) must be installed and available in your PATH
+- Node.js 18+ 
+- Git repository (the tool manages Git worktrees)
 
 ## Installation
 
-### For Development
-```bash
-cd claude-code-crew
-pnpm install  # or npm install
-```
-
-### For Global Use
 ```bash
 npm install -g claude-code-crew
-# or
-pnpm add -g claude-code-crew
-```
-
-## Development
-
-```bash
-# Start both server and client in development mode
-pnpm dev  # or npm run dev
-
-# Or run them separately
-pnpm dev:server  # Backend on http://localhost:3001
-pnpm dev:client  # Frontend on http://localhost:3000
-```
-
-## Build
-
-```bash
-npm run build
-```
-
-## Production
-
-```bash
-npm start
 ```
 
 ## Usage
 
-Once installed, navigate to any Git repository and run:
+Navigate to any Git repository and run:
 
 ```bash
+cd /path/to/your/git/repo
 claude-code-crew
 ```
 
-The web interface will be available at http://localhost:3001
+The web interface will be available at **http://localhost:3001**
 
-### Features Available:
+### Available Features:
 - **View Worktrees**: See all git worktrees in the sidebar
-- **Create Session**: Click on any worktree to start a Claude Code session
+- **Create Sessions**: Click on any worktree to start a Claude Code session
 - **Monitor Status**: Real-time session state indicators (busy/waiting/idle)
+- **Terminal History**: Switch between sessions and see previous output
 - **Manage Worktrees**: Create, delete, or merge worktrees from the UI
+
+## Configuration
+
+### Environment Variables
+
+- `PORT`: Server port (default: 3001)
+- `WORK_DIR`: Working directory (default: current directory)
+- `CC_CLAUDE_ARGS`: Additional arguments for Claude Code sessions
+
+### Example with custom port:
+```bash
+PORT=8080 claude-code-crew
+```
 
 ## Architecture
 
@@ -88,7 +60,7 @@ The web interface will be available at http://localhost:3001
 - REST API for worktree operations
 - WebSocket server for terminal sessions
 - PTY management using node-pty
-- Session state detection
+- Session state detection and history preservation
 
 ### Frontend (React + TypeScript + Material-UI)
 - Terminal emulation with xterm.js
@@ -96,15 +68,63 @@ The web interface will be available at http://localhost:3001
 - Worktree management UI
 - Responsive sidebar navigation
 
-## Environment Variables
+### Single-port Design
+- Serves both API and web UI on the same port
+- No CORS configuration needed
+- Easy to deploy and use
 
-- `PORT`: Server port (default: 3001)
-- `CLIENT_URL`: Client URL for CORS (default: http://localhost:3000)
-- `CC_CLAUDE_ARGS`: Additional arguments for Claude Code sessions
+## Development
+
+For contributors who want to develop claude-code-crew:
+
+### Setup
+```bash
+git clone https://github.com/to-na/claude-code-crew.git
+cd claude-code-crew
+pnpm install
+```
+
+### Development Mode
+```bash
+# Start development environment
+./start.sh
+```
+
+### Build
+```bash
+pnpm run build
+```
 
 ## Tech Stack
 
 - **Backend**: Node.js, Express, Socket.io, node-pty
 - **Frontend**: React, TypeScript, Material-UI, xterm.js
-- **Build Tools**: Vite, TSX
+- **Build Tools**: Vite, TypeScript
 - **Communication**: WebSocket, REST API
+
+## Troubleshooting
+
+### Common Issues
+
+**"claude: command not found"**
+- Install Claude Code CLI first: https://claude.ai/code
+
+**"No worktrees found"**
+- Make sure you're running the command inside a Git repository
+- Check that the repository has at least one worktree
+
+**Port already in use**
+- Change the port: `PORT=8080 claude-code-crew`
+- Or stop the process using port 3001
+
+**Terminal not showing history**
+- Try clicking on the worktree again to reactivate the session
+- Check browser console for WebSocket connection errors
+
+## License
+
+MIT
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
