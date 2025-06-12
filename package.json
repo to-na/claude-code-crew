@@ -26,6 +26,14 @@
   },
   "scripts": {
     "start": "node server/dist/server/src/index.js",
+    "dev": "pnpm run build && pnpm run start:single",
+    "build": "pnpm run -r build",
+    "postbuild": "cp -r client/dist server/dist/public",
+    "start:single": "NODE_ENV=production node server/dist/server/src/index.js",
+    "test": "pnpm run -r test",
+    "test:run": "pnpm run -r test:run",
+    "test:coverage": "pnpm run -r test:coverage",
+    "typecheck": "pnpm run -r typecheck",
     "prepublishOnly": "echo 'Built version included in package'"
   },
   "dependencies": {
@@ -35,7 +43,9 @@
     "socket.io": "^4.7.2"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3",
+    "@types/node": "^20.10.0"
   },
   "files": [
     "bin",
