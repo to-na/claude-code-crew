@@ -1,0 +1,45 @@
+# Development files
+.env*
+*.log
+node_modules/
+coverage/
+.nyc_output
+.vitest/
+
+# Source files (we publish the built version)
+client/src/
+server/src/
+client/vite.config.ts
+client/tsconfig.json
+server/tsconfig.json
+
+# Tests
+**/__tests__/
+**/*.test.ts
+**/*.test.js
+*.test.*
+
+# Duplicate files
+server/dist/public/dist/
+
+# Development tools
+.pnpm-store/
+.pnpm/
+
+# Git
+.git/
+.gitignore
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Other
+*.tgz
+*.tar.gz

@@ -1,0 +1,54 @@
+{
+  "name": "claude-code-crew",
+  "version": "0.1.0",
+  "description": "Web UI based crew management for Claude Code sessions",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/to-na/claude-code-crew.git"
+  },
+  "keywords": [
+    "claude",
+    "code",
+    "worktree",
+    "git",
+    "web",
+    "gui",
+    "terminal"
+  ],
+  "author": "to-na",
+  "license": "MIT",
+  "bin": {
+    "claude-code-crew": "./bin/claude-code-crew.js"
+  },
+  "scripts": {
+    "dev": "pnpm run build && pnpm run start:single",
+    "dev:multi": "concurrently \"pnpm run --filter @claude-code-crew/server dev\" \"pnpm run --filter @claude-code-crew/client dev\"",
+    "dev:server": "pnpm run --filter @claude-code-crew/server dev",
+    "dev:client": "pnpm run --filter @claude-code-crew/client dev",
+    "build": "pnpm run -r build",
+    "postbuild": "cp -r client/dist server/dist/public",
+    "start": "pnpm run --filter @claude-code-crew/server start",
+    "start:single": "NODE_ENV=production pnpm run --filter @claude-code-crew/server start",
+    "prepublishOnly": "pnpm run build",
+    "test": "pnpm run -r test",
+    "test:run": "pnpm run -r test:run",
+    "test:coverage": "pnpm run -r test:coverage"
+  },
+  "dependencies": {
+    "@claude-code-crew/server": "workspace:*",
+    "@claude-code-crew/client": "workspace:*"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "files": [
+    "bin",
+    "server/dist",
+    "server/package.json",
+    "client/package.json",
+    "shared",
+    "pnpm-workspace.yaml",
+    "start.sh"
+  ]
+}
