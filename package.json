@@ -27,8 +27,8 @@
   "scripts": {
     "start": "node server/dist/server/src/index.js",
     "dev": "pnpm run build && pnpm run start:single",
-    "build": "pnpm run -r build",
-    "postbuild": "cp -r client/dist server/dist/public",
+    "build": "pnpm run -r build && pnpm run copy-client",
+    "copy-client": "mkdir -p server/dist/public && cp -r client/dist/* server/dist/public/",
     "start:single": "NODE_ENV=production node server/dist/server/src/index.js",
     "test": "pnpm run -r test",
     "test:run": "pnpm run -r test:run",

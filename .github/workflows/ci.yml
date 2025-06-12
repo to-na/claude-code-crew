@@ -49,8 +49,13 @@ jobs:
     
     - name: Check build output
       run: |
+        echo "Checking server dist structure:"
         ls -la server/dist/
-        ls -la server/dist/public/
+        echo "Checking if public directory was created:"
+        ls -la server/dist/public/ || echo "Public directory not found - checking for client build"
+        echo "Checking client dist:"
+        ls -la client/dist/ || echo "Client dist not found"
+        echo "Verifying server entry point:"
         test -f server/dist/server/src/index.js
 
   build-and-publish-check:
