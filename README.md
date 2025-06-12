@@ -9,6 +9,7 @@
 [![GitHub Issues](https://img.shields.io/github/issues/to-na/claude-code-crew.svg)](https://github.com/to-na/claude-code-crew/issues)
 [![GitHub Stars](https://img.shields.io/github/stars/to-na/claude-code-crew.svg)](https://github.com/to-na/claude-code-crew/stargazers)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/to-na/claude-code-crew/pulls)
+[![Sponsor](https://img.shields.io/badge/sponsor-❤-ff69b4.svg)](https://github.com/sponsors/to-na)
 
 A web-based interface for managing multiple Claude Code sessions across Git worktrees.
 
@@ -140,3 +141,10 @@ MIT
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Support
+
+If you find this project useful, please consider:
+- ⭐ Starring the repository
+- 🐛 Reporting bugs or suggesting features
+- 💖 [Becoming a sponsor](https://github.com/sponsors/to-na)
