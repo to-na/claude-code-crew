@@ -18,6 +18,7 @@ server/tsconfig.json
 **/*.test.ts
 **/*.test.js
 *.test.*
+**/test-helpers.*
 
 # Duplicate files
 server/dist/public/dist/
