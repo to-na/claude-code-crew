@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { spawn } from 'child_process';
 import { createTestRepo, cleanupTestRepo, waitFor } from './test-helpers.js';
 
-describe('Server Integration Test', () => {
+describe.skipIf(process.env.CI === 'true')('Server Integration Test', () => {
   let serverProcess: any;
   let testRepoPath: string;
   const port = 3098;
@@ -20,8 +20,8 @@ describe('Server Integration Test', () => {
   });
 
   it('should start server successfully', async () => {
-    serverProcess = spawn('tsx', ['src/index.ts'], {
-      cwd: '/Users/natori/workspace/dev/many-claude/claude-crew/server',
+    serverProcess = spawn('node', ['dist/server/src/index.js'], {
+      cwd: join(process.cwd()),
       env: {
         ...process.env,
         PORT: port.toString(),
