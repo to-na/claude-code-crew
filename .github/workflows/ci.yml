@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: 8
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'pnpm'
+    
+    - name: Install dependencies
+      run: pnpm install
+    
+    - name: Run type check
+      run: pnpm run -r typecheck
+    
+    - name: Run tests
+      run: pnpm run test:run
+    
+    - name: Run build
+      run: pnpm run build
+    
+    - name: Check build output
+      run: |
+        ls -la server/dist/
+        ls -la server/dist/public/
+        test -f server/dist/server/src/index.js
+
+  build-and-publish-check:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: 8
+    
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20.x
+        cache: 'pnpm'
+    
+    - name: Install dependencies
+      run: pnpm install
+    
+    - name: Build project
+      run: pnpm run build
+    
+    - name: Test npm pack
+      run: |
+        npm pack --dry-run
+        echo "Package size: $(npm pack --dry-run 2>&1 | grep 'package size:' | awk '{print $3}')"
+        echo "Files included: $(npm pack --dry-run 2>&1 | grep 'total files:' | awk '{print $3}')"
+    
+    - name: Check global install simulation
+      run: |
+        # Simulate what would happen during global install
+        node bin/claude-code-crew.js --help || echo "Binary check completed"

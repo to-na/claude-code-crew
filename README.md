@@ -2,6 +2,8 @@
 
 [![npm version](https://badge.fury.io/js/claude-code-crew.svg)](https://www.npmjs.com/package/claude-code-crew)
 [![npm downloads](https://img.shields.io/npm/dm/claude-code-crew.svg)](https://www.npmjs.com/package/claude-code-crew)
+[![CI](https://github.com/to-na/claude-code-crew/actions/workflows/ci.yml/badge.svg)](https://github.com/to-na/claude-code-crew/actions/workflows/ci.yml)
+[![Test Coverage](https://github.com/to-na/claude-code-crew/actions/workflows/coverage.yml/badge.svg)](https://github.com/to-na/claude-code-crew/actions/workflows/coverage.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Node.js Version](https://img.shields.io/node/v/claude-code-crew.svg)](https://nodejs.org)
 [![GitHub Issues](https://img.shields.io/github/issues/to-na/claude-code-crew.svg)](https://github.com/to-na/claude-code-crew/issues)

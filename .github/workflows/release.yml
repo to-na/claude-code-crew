@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: 8
+    
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20.x
+        cache: 'pnpm'
+        registry-url: 'https://registry.npmjs.org'
+    
+    - name: Install dependencies
+      run: pnpm install
+    
+    - name: Run tests
+      run: pnpm run test:run
+    
+    - name: Build project
+      run: pnpm run build
+    
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+    
+    # Note: npm publish should be done manually with OTP
+    - name: Package check
+      run: |
+        npm pack --dry-run
+        echo "::notice::Ready for npm publish. Run 'npm publish --otp=<code>' locally"
