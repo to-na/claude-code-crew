@@ -1,14 +1,30 @@
 import { Express } from 'express';
 import { Server } from 'socket.io';
 import { WorktreeService } from '../services/worktreeService.js';
+import { SessionManager } from '../services/sessionManager.js';
 import { 
   CreateWorktreeRequest, 
   DeleteWorktreeRequest, 
-  MergeWorktreeRequest 
+  MergeWorktreeRequest,
+  Worktree 
 } from '../../../shared/types.js';
 
-export function setupApiRoutes(app: Express, io: Server) {
+export function setupApiRoutes(app: Express, io: Server, sessionManager: SessionManager) {
   const worktreeService = new WorktreeService(process.env.WORK_DIR);
+  
+  // Helper function to get worktrees with session info
+  const getWorktreesWithSessions = (): Worktree[] => {
+    const worktrees = worktreeService.getWorktrees();
+    const sessions = sessionManager.getAllSessions();
+    
+    return worktrees.map(worktree => {
+      const session = sessions.find(s => s.worktreePath === worktree.path);
+      return {
+        ...worktree,
+        session: session || undefined,
+      };
+    });
+  };
 
   // Get all worktrees
   app.get('/api/worktrees', (req, res) => {
@@ -45,8 +61,8 @@ export function setupApiRoutes(app: Express, io: Server) {
       const result = worktreeService.createWorktree(path, branch);
       
       if (result.success) {
-        // Emit worktree update event
-        const worktrees = worktreeService.getWorktrees();
+        // Emit worktree update event with session info
+        const worktrees = getWorktreesWithSessions();
         io.emit('worktrees:updated', worktrees);
         res.json({ success: true });
       } else {
@@ -81,8 +97,8 @@ export function setupApiRoutes(app: Express, io: Server) {
       if (errors.length > 0) {
         res.status(400).json({ error: errors.join(', ') });
       } else {
-        // Emit worktree update event
-        const worktrees = worktreeService.getWorktrees();
+        // Emit worktree update event with session info
+        const worktrees = getWorktreesWithSessions();
         io.emit('worktrees:updated', worktrees);
         res.json({ success: true });
       }
@@ -128,8 +144,9 @@ export function setupApiRoutes(app: Express, io: Server) {
         }
       }
 
-      // Emit worktree update event
-      const worktrees = worktreeService.getWorktrees();
+      // Emit worktree update event with session info
+      const worktrees = getWorktreesWithSessions();
+      console.log(`[Merge] Emitting worktrees:updated event with ${worktrees.length} worktrees`);
       io.emit('worktrees:updated', worktrees);
       res.json({ success: true });
     } catch (error) {

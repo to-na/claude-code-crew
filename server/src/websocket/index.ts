@@ -3,14 +3,15 @@ import { SessionManager } from '../services/sessionManager.js';
 import { WorktreeService } from '../services/worktreeService.js';
 import { Session, Worktree } from '../../../shared/types.js';
 
-export function setupWebSocket(io: Server) {
-  const sessionManager = new SessionManager();
+export function setupWebSocket(io: Server, sessionManager: SessionManager) {
   const worktreeService = new WorktreeService(process.env.WORK_DIR);
 
   // Update worktrees with session info
   const getWorktreesWithSessions = (): Worktree[] => {
     const worktrees = worktreeService.getWorktrees();
     const sessions = sessionManager.getAllSessions();
+    
+    console.log(`[WebSocket] Getting worktrees with sessions: ${worktrees.length} worktrees, ${sessions.length} sessions`);
     
     return worktrees.map(worktree => {
       const session = sessions.find(s => s.worktreePath === worktree.path);
