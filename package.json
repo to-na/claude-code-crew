@@ -1,6 +1,6 @@
 {
   "name": "claude-code-crew",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Web UI based crew management for Claude Code sessions",
   "type": "module",
   "repository": {
