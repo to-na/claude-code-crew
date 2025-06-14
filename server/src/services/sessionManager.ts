@@ -46,7 +46,17 @@ export class SessionManager extends EventEmitter {
     const hasBottomBorder = this.includesPromptBoxBottomBorder(cleanData);
     const hasWaitingPrompt =
       cleanData.includes('│ Do you want') ||
-      cleanData.includes('│ Would you like');
+      cleanData.includes('│ Would you like') ||
+      cleanData.includes('Do you want') ||
+      cleanData.includes('Would you like') ||
+      cleanData.includes('Continue?') ||
+      cleanData.includes('Proceed?') ||
+      cleanData.includes('(y/n)') ||
+      cleanData.includes('(Y/n)') ||
+      cleanData.includes('[y/N]') ||
+      cleanData.includes('YES') ||
+      cleanData.includes('NO') ||
+      cleanData.includes('[Y/n]');
     const wasWaitingWithBottomBorder =
       this.waitingWithBottomBorder.get(sessionId) || false;
     const hasEscToInterrupt = cleanData
@@ -56,6 +66,7 @@ export class SessionManager extends EventEmitter {
     let newState = currentState;
 
     if (hasWaitingPrompt) {
+      console.log('[SessionManager] Detected waiting prompt in output:', cleanData.substring(0, 100) + '...');
       newState = 'waiting_input';
       if (hasBottomBorder) {
         this.waitingWithBottomBorder.set(sessionId, true);

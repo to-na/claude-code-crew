@@ -1,6 +1,5 @@
 export interface AutoEnterSettings {
   globalEnabled: boolean;
-  delayMs: number;
   perWorktreeSettings: Record<string, boolean>;
 }
 
@@ -28,7 +27,6 @@ export class AutoEnterService {
         const parsed = JSON.parse(stored);
         return {
           globalEnabled: parsed.globalEnabled ?? false,
-          delayMs: parsed.delayMs ?? 500,
           perWorktreeSettings: parsed.perWorktreeSettings ?? {},
         };
       } catch (error) {
@@ -37,7 +35,6 @@ export class AutoEnterService {
     }
     return {
       globalEnabled: false,
-      delayMs: 500,
       perWorktreeSettings: {},
     };
   }
@@ -60,7 +57,7 @@ export class AutoEnterService {
   }
 
   getDelayMs(): number {
-    return this.settings.delayMs;
+    return 3000; // 固定3秒
   }
 
   /**
@@ -98,19 +95,6 @@ export class AutoEnterService {
     this.saveSettings();
   }
 
-  /**
-   * 遅延時間を設定
-   */
-  setDelayMs(delayMs: number): void {
-    if (delayMs < 0 || delayMs > 5000) {
-      console.warn('[AutoEnterService] Invalid delay value, must be between 0 and 5000ms');
-      return;
-    }
-    
-    this.settings.delayMs = delayMs;
-    console.log('[AutoEnterService] Setting delay:', delayMs);
-    this.saveSettings();
-  }
 
   /**
    * ワークツリー個別設定を変更

@@ -94,6 +94,8 @@ const SessionManager: React.FC = () => {
         console.log('[Client] Previous state:', previousState, 'New state:', session.state);
         
         if (previousState && previousState !== session.state) {
+          console.log('[Client] State changed from', previousState, 'to', session.state, 'for worktree:', worktree.branch);
+          
           // 通知機能
           notificationService.notifyStateChange(
             worktree.branch,
@@ -163,8 +165,8 @@ const SessionManager: React.FC = () => {
       return;
     }
 
-    console.log('[AutoEnter] Scheduling auto-enter for session:', session.id);
     const delayMs = autoEnterService.getDelayMs();
+    console.log('[AutoEnter] Scheduling auto-enter for session:', session.id, 'with delay:', delayMs + 'ms');
     
     // 既存のタイマーがあればキャンセル
     const existingTimeout = autoEnterTimeoutRef.current.get(session.id);
@@ -172,10 +174,10 @@ const SessionManager: React.FC = () => {
       clearTimeout(existingTimeout);
     }
 
-    // 遅延後にEnterキーを送信
+    // 3秒後にEnterキーを送信
     const timeout = setTimeout(() => {
-      if (socket && session.state === 'waiting_input') {
-        console.log('[AutoEnter] Sending auto-enter for session:', session.id);
+      if (socket) {
+        console.log('[AutoEnter] ✅ Sending auto-enter (\\r) for session:', session.id);
         socket.emit('session:input', { 
           sessionId: session.id, 
           input: '\r' 
@@ -184,7 +186,7 @@ const SessionManager: React.FC = () => {
         // タイマーをクリーンアップ
         autoEnterTimeoutRef.current.delete(session.id);
       } else {
-        console.log('[AutoEnter] Skipped auto-enter - session state changed or socket unavailable');
+        console.log('[AutoEnter] ❌ Skipped auto-enter - socket unavailable');
       }
     }, delayMs);
 

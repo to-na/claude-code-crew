@@ -5,7 +5,6 @@ import {
   FormGroup,
   FormControlLabel,
   Switch,
-  Slider,
   List,
   ListItem,
   ListItemText,
@@ -44,11 +43,6 @@ const AutoEnterSettings: React.FC<AutoEnterSettingsProps> = ({ worktrees }) => {
     setSettings(autoEnterService.getSettings());
   };
 
-  const handleDelayChange = (_event: Event, newValue: number | number[]) => {
-    const delayMs = newValue as number;
-    autoEnterService.setDelayMs(delayMs);
-    setSettings(autoEnterService.getSettings());
-  };
 
   const handleWorktreeToggle = (worktreePath: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
     const enabled = event.target.checked;
@@ -56,12 +50,6 @@ const AutoEnterSettings: React.FC<AutoEnterSettingsProps> = ({ worktrees }) => {
     setSettings(autoEnterService.getSettings());
   };
 
-  const formatDelayText = (value: number) => {
-    if (value < 1000) {
-      return `${value}ms`;
-    }
-    return `${(value / 1000).toFixed(1)}s`;
-  };
 
   return (
     <Box>
@@ -87,31 +75,9 @@ const AutoEnterSettings: React.FC<AutoEnterSettingsProps> = ({ worktrees }) => {
         />
       </FormGroup>
 
-      {settings.globalEnabled && (
-        <Box sx={{ mt: 2 }}>
-          <Typography variant="body2" gutterBottom>
-            遅延時間: {formatDelayText(settings.delayMs)}
-          </Typography>
-          <Slider
-            value={settings.delayMs}
-            onChange={handleDelayChange}
-            min={100}
-            max={3000}
-            step={100}
-            marks={[
-              { value: 100, label: '0.1s' },
-              { value: 500, label: '0.5s' },
-              { value: 1000, label: '1s' },
-              { value: 2000, label: '2s' },
-              { value: 3000, label: '3s' },
-            ]}
-            sx={{ width: '100%', mt: 1 }}
-          />
-        </Box>
-      )}
 
       <Alert severity="info" sx={{ mt: 2, mb: 2 }}>
-        wait_input状態になった際に、設定した遅延時間後に自動でEnterキーを送信します。
+        wait_input状態になった際に、3秒後に自動でEnterキーを送信します。
       </Alert>
 
       {settings.globalEnabled && worktrees.length > 0 && (
