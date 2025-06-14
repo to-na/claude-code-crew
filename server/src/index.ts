@@ -4,6 +4,7 @@ import { Server } from 'socket.io';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import dotenv from 'dotenv';
+import cors from 'cors';
 
 import { setupWebSocket } from './websocket/index.js';
 import { setupApiRoutes } from './api/index.js';
@@ -19,9 +20,24 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer);
+
+// CORS configuration
+const corsOptions = {
+  origin: [
+    'http://localhost:3000',  // Vite dev server
+    'http://localhost:3002',  // NPM published version
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3002',
+  ],
+  credentials: true,
+};
+
+const io = new Server(httpServer, {
+  cors: corsOptions
+});
 
 // Middleware
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Create shared SessionManager instance
