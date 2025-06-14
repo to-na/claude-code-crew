@@ -42,7 +42,8 @@ export class AutoEnterService {
   private saveSettings(): void {
     try {
       localStorage.setItem(AUTO_ENTER_SETTINGS_KEY, JSON.stringify(this.settings));
-      console.log('[AutoEnterService] Settings saved:', this.settings);
+      // Only log when debugging
+      // console.log('[AutoEnterService] Settings saved:', this.settings);
     } catch (error) {
       console.error('[AutoEnterService] Failed to save settings:', error);
     }
@@ -116,7 +117,10 @@ export class AutoEnterService {
    */
   shouldAutoEnter(worktreePath: string): boolean {
     const enabled = this.getWorktreeSetting(worktreePath);
-    console.log('[AutoEnterService] Should auto enter for', worktreePath, ':', enabled);
+    // Only log when enabled to reduce noise
+    if (enabled) {
+      console.log('[AutoEnterService] Auto enter enabled for', worktreePath);
+    }
     return enabled;
   }
 
@@ -127,7 +131,7 @@ export class AutoEnterService {
     if (!(worktreePath in this.settings.perWorktreeSettings)) {
       this.settings.perWorktreeSettings[worktreePath] = true;
       this.saveSettings();
-      console.log('[AutoEnterService] Added worktree:', worktreePath);
+      console.log('[AutoEnterService] Added new worktree:', worktreePath);
     }
   }
 

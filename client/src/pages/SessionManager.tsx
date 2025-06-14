@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box,
   Drawer,
@@ -51,25 +51,35 @@ const SessionManager: React.FC = () => {
   const previousStateRef = useRef<Map<string, string>>(new Map());
   const worktreesRef = useRef<Worktree[]>([]);
   const hasShownNotificationDialog = useRef(false);
+  const lastAutoEnterTimeRef = useRef<Map<string, number>>(new Map());
   const notificationService = NotificationService.getInstance();
   const autoEnterService = AutoEnterService.getInstance();
   const autoEnterTimeoutRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   useEffect(() => {
-    const newSocket = io();
+    const newSocket = io('http://localhost:3001');
     setSocket(newSocket);
 
     newSocket.on('worktrees:updated', (updatedWorktrees: Worktree[]) => {
-      console.log('[Client] Received worktrees:updated event with', updatedWorktrees.length, 'worktrees');
-      // Force React to detect the change by creating a new array
-      setWorktrees([...updatedWorktrees]);
-      // Update ref for use in event handlers
+      // Check if worktrees actually changed to prevent unnecessary updates
+      const currentPaths = worktreesRef.current.map(w => w.path).sort().join(',');
+      const newPaths = updatedWorktrees.map(w => w.path).sort().join(',');
+      const hasNewWorktrees = currentPaths !== newPaths;
+      
+      if (hasNewWorktrees) {
+        console.log('[Client] Received worktrees:updated event with', updatedWorktrees.length, 'worktrees');
+      }
+      
+      // Update worktrees state
+      setWorktrees(updatedWorktrees);
       worktreesRef.current = updatedWorktrees;
       
-      // ワークツリーリストが更新されたときに自動Enter設定を初期化
-      updatedWorktrees.forEach(worktree => {
-        autoEnterService.addWorktree(worktree.path);
-      });
+      // Only initialize auto-enter settings for newly added worktrees
+      if (hasNewWorktrees) {
+        updatedWorktrees.forEach(worktree => {
+          autoEnterService.addWorktree(worktree.path);
+        });
+      }
     });
 
     newSocket.on('session:created', (session: Session) => {
@@ -140,17 +150,20 @@ const SessionManager: React.FC = () => {
   useEffect(() => {
     if (selectedWorktree && worktrees.length > 0) {
       const updated = worktrees.find(w => w.path === selectedWorktree.path);
-      if (updated) {
+      if (updated && (
+        updated.session?.id !== selectedWorktree.session?.id ||
+        updated.session?.state !== selectedWorktree.session?.state
+      )) {
         setSelectedWorktree(updated);
         if (updated.session) {
           setActiveSession(updated.session);
         }
       }
     }
-  }, [worktrees, selectedWorktree]);
+  }, [worktrees, selectedWorktree?.path, selectedWorktree?.session?.id, selectedWorktree?.session?.state]);
 
   // 自動Enter機能の処理
-  const handleAutoEnter = (session: Session, worktree: Worktree, _previousState: string) => {
+  const handleAutoEnter = useCallback((session: Session, worktree: Worktree, previousState: string) => {
     // waiting_input状態になった場合のみ処理
     if (session.state !== 'waiting_input') {
       // waiting_input以外の状態になった場合、pending中のタイマーをキャンセル
@@ -166,6 +179,23 @@ const SessionManager: React.FC = () => {
     // 自動Enter設定をチェック
     if (!autoEnterService.shouldAutoEnter(worktree.path)) {
       console.log('[AutoEnter] Auto-enter disabled for worktree:', worktree.path);
+      return;
+    }
+
+    // 連続実行防止: 最後の実行から5秒以内は実行しない
+    const now = Date.now();
+    const lastAutoEnterTime = lastAutoEnterTimeRef.current.get(session.id) || 0;
+    const timeSinceLastAutoEnter = now - lastAutoEnterTime;
+    const minInterval = 5000; // 5秒
+    
+    if (timeSinceLastAutoEnter < minInterval) {
+      console.log(`[AutoEnter] Skipping auto-enter for session ${session.id} - too soon (${timeSinceLastAutoEnter}ms < ${minInterval}ms)`);
+      return;
+    }
+
+    // busyからwaiting_inputへの変化の場合のみ実行（初期状態やidleからの変化は除外）
+    if (previousState !== 'busy') {
+      console.log(`[AutoEnter] Skipping auto-enter for session ${session.id} - not from busy state (was: ${previousState})`);
       return;
     }
 
@@ -187,6 +217,9 @@ const SessionManager: React.FC = () => {
           input: '\r' 
         });
         
+        // 実行時刻を記録
+        lastAutoEnterTimeRef.current.set(session.id, Date.now());
+        
         // タイマーをクリーンアップ
         autoEnterTimeoutRef.current.delete(session.id);
       } else {
@@ -196,7 +229,7 @@ const SessionManager: React.FC = () => {
 
     // タイマーを保存
     autoEnterTimeoutRef.current.set(session.id, timeout);
-  };
+  }, [socket, autoEnterService]);
 
   // 初回アクセス時の通知権限ダイアログ表示
   useEffect(() => {
@@ -211,7 +244,7 @@ const SessionManager: React.FC = () => {
     }
   }, [worktrees]);
 
-  const handleSelectWorktree = (worktree: Worktree) => {
+  const handleSelectWorktree = useCallback((worktree: Worktree) => {
     setSelectedWorktree(worktree);
     setActiveTab('terminal'); // Reset to terminal tab when selecting a new worktree
     checkInstructionsFile(worktree);
@@ -224,7 +257,7 @@ const SessionManager: React.FC = () => {
       socket.emit('session:setActive', worktree.path);
       setActiveSession(worktree.session);
     }
-  };
+  }, [socket]);
 
   // Check if instructions file exists for the selected worktree
   const checkInstructionsFile = async (worktree: Worktree) => {
@@ -239,11 +272,11 @@ const SessionManager: React.FC = () => {
     }
   };
 
-  const handleTabChange = (tab: TabType) => {
+  const handleTabChange = useCallback((tab: TabType) => {
     setActiveTab(tab);
-  };
+  }, []);
 
-  const getStatusColor = (state?: string) => {
+  const getStatusColor = useCallback((state?: string) => {
     switch (state) {
       case 'busy':
         return 'warning';
@@ -254,9 +287,9 @@ const SessionManager: React.FC = () => {
       default:
         return 'default';
     }
-  };
+  }, []);
 
-  const getStatusIcon = (state?: string) => {
+  const getStatusIcon = useCallback((state?: string) => {
     const color = getStatusColor(state);
     const statusText = state ? state.replace('_', ' ') : '';
 
@@ -270,7 +303,7 @@ const SessionManager: React.FC = () => {
         />
       </Tooltip>
     );
-  };
+  }, [getStatusColor]);
 
   return (
     <Box sx={{ display: 'flex', height: '100%' }}>
