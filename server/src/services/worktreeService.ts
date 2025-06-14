@@ -100,6 +100,8 @@ export class WorktreeService {
   createWorktree(
     worktreePath: string,
     branch: string,
+    baseBranch?: string,
+    isNewBranch?: boolean
   ): { success: boolean; error?: string } {
     try {
       // Convert relative path to absolute path
@@ -115,23 +117,31 @@ export class WorktreeService {
         };
       }
 
-      // Check if branch exists
-      let branchExists = false;
-      try {
-        execSync(`git rev-parse --verify "${branch}"`, {
-          cwd: this.rootPath,
-          encoding: 'utf8',
-          stdio: 'pipe', // Suppress error output
-        });
-        branchExists = true;
-      } catch {
-        // Branch doesn't exist
-      }
+      let command: string;
 
-      // Create the worktree
-      const command = branchExists
-        ? `git worktree add "${absolutePath}" "${branch}"`
-        : `git worktree add -b "${branch}" "${absolutePath}"`;
+      if (isNewBranch) {
+        // Creating a new branch
+        if (baseBranch) {
+          command = `git worktree add -b "${branch}" "${absolutePath}" "${baseBranch}"`;
+        } else {
+          command = `git worktree add -b "${branch}" "${absolutePath}"`;
+        }
+      } else {
+        // Using existing branch - check if it exists
+        try {
+          execSync(`git rev-parse --verify "${branch}"`, {
+            cwd: this.rootPath,
+            encoding: 'utf8',
+            stdio: 'pipe', // Suppress error output
+          });
+          command = `git worktree add "${absolutePath}" "${branch}"`;
+        } catch {
+          return {
+            success: false,
+            error: `Branch "${branch}" does not exist`,
+          };
+        }
+      }
 
       execSync(command, {
         cwd: this.rootPath,
@@ -144,6 +154,45 @@ export class WorktreeService {
         success: false,
         error:
           error instanceof Error ? error.message : 'Failed to create worktree',
+      };
+    }
+  }
+
+  getBranches(): { local: string[]; remote: string[] } {
+    try {
+      // Get local branches
+      const localOutput = execSync('git branch --format="%(refname:short)"', {
+        cwd: this.rootPath,
+        encoding: 'utf8',
+        stdio: 'pipe',
+      });
+      const localBranches = localOutput
+        .trim()
+        .split('\n')
+        .filter(branch => branch.trim() !== '')
+        .map(branch => branch.trim());
+
+      // Get remote branches
+      const remoteOutput = execSync('git branch -r --format="%(refname:short)"', {
+        cwd: this.rootPath,
+        encoding: 'utf8',
+        stdio: 'pipe',
+      });
+      const remoteBranches = remoteOutput
+        .trim()
+        .split('\n')
+        .filter(branch => branch.trim() !== '' && !branch.includes('HEAD'))
+        .map(branch => branch.trim());
+
+      return {
+        local: localBranches,
+        remote: remoteBranches,
+      };
+    } catch (error) {
+      console.error('[WorktreeService] Failed to get branches:', error);
+      return {
+        local: [],
+        remote: [],
       };
     }
   }

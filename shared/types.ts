@@ -18,6 +18,8 @@ export interface Worktree {
 export interface CreateWorktreeRequest {
   path: string;
   branch: string;
+  baseBranch?: string;
+  isNewBranch?: boolean;
 }
 
 export interface DeleteWorktreeRequest {

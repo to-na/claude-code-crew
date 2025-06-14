@@ -29,9 +29,7 @@ import CreateWorktreeDialog from '../components/CreateWorktreeDialog';
 import DeleteWorktreeDialog from '../components/DeleteWorktreeDialog';
 import MergeWorktreeDialog from '../components/MergeWorktreeDialog';
 import NotificationSettings from '../components/NotificationSettings';
-import NotificationPermissionDialog from '../components/NotificationPermissionDialog';
-import WorktreeTabs, { TabType } from '../components/WorktreeTabs';
-import InstructionsViewer from '../components/InstructionsViewer';
+import NotificationPermissionDialog from '../components/NotificationPermissionDialog';\nimport WorktreeTabs, { TabType } from '../components/WorktreeTabs';\nimport InstructionsViewer from '../components/InstructionsViewer';
 import { NotificationService } from '../services/notificationService';
 import { AutoEnterService } from '../services/autoEnterService';
 
@@ -46,8 +44,6 @@ const SessionManager: React.FC = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabType>('terminal');
-  const [hasInstructions, setHasInstructions] = useState(false);
   const previousStateRef = useRef<Map<string, string>>(new Map());
   const worktreesRef = useRef<Worktree[]>([]);
   const hasShownNotificationDialog = useRef(false);

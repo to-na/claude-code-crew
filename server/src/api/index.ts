@@ -1,5 +1,7 @@
 import { Express } from 'express';
 import { Server } from 'socket.io';
+import { promises as fs } from 'fs';
+import path from 'path';
 import { WorktreeService } from '../services/worktreeService.js';
 import { SessionManager } from '../services/sessionManager.js';
 import { 
@@ -41,10 +43,25 @@ export function setupApiRoutes(app: Express, io: Server, sessionManager: Session
     }
   });
 
+  // Get branches
+  app.get('/api/branches', (req, res) => {
+    try {
+      if (!worktreeService.hasCommits()) {
+        return res.status(400).json({ error: 'Repository has no commits' });
+      }
+      const branches = worktreeService.getBranches();
+      res.json(branches);
+    } catch (error) {
+      res.status(500).json({ 
+        error: error instanceof Error ? error.message : 'Failed to get branches' 
+      });
+    }
+  });
+
   // Create a new worktree
   app.post('/api/worktrees', (req, res) => {
     try {
-      const { path, branch } = req.body as CreateWorktreeRequest;
+      const { path, branch, baseBranch, isNewBranch } = req.body as CreateWorktreeRequest;
       
       if (!path || !branch) {
         return res.status(400).json({ error: 'Path and branch are required' });
@@ -57,8 +74,8 @@ export function setupApiRoutes(app: Express, io: Server, sessionManager: Session
         });
       }
 
-      console.log(`Creating worktree: path="${path}", branch="${branch}"`);
-      const result = worktreeService.createWorktree(path, branch);
+      console.log(`Creating worktree: path="${path}", branch="${branch}", baseBranch="${baseBranch}", isNewBranch=${isNewBranch}`);
+      const result = worktreeService.createWorktree(path, branch, baseBranch, isNewBranch);
       
       if (result.success) {
         // Emit worktree update event with session info
@@ -152,6 +169,47 @@ export function setupApiRoutes(app: Express, io: Server, sessionManager: Session
     } catch (error) {
       res.status(500).json({ 
         error: error instanceof Error ? error.message : 'Failed to merge worktrees' 
+      });
+    }
+  });
+
+  // Get instructions file for a worktree
+  app.get('/api/worktrees/:worktreePath/instructions', async (req, res) => {
+    try {
+      const worktreePath = decodeURIComponent(req.params.worktreePath);
+      
+      // Convert worktree path to instructions filename
+      // Replace slashes with underscores and add _instructions.md
+      const worktreeName = path.basename(worktreePath);
+      const instructionsFileName = `${worktreeName.replace(/\//g, '_')}_instructions.md`;
+      const instructionsFilePath = path.join(worktreePath, instructionsFileName);
+      
+      console.log(`[API] Looking for instructions file: ${instructionsFilePath}`);
+      
+      try {
+        const content = await fs.readFile(instructionsFilePath, 'utf-8');
+        res.json({ 
+          success: true, 
+          content,
+          filename: instructionsFileName,
+          path: instructionsFilePath
+        });
+      } catch (fileError) {
+        if ((fileError as NodeJS.ErrnoException).code === 'ENOENT') {
+          res.json({ 
+            success: false, 
+            error: 'Instructions file not found',
+            filename: instructionsFileName
+          });
+        } else {
+          throw fileError;
+        }
+      }
+    } catch (error) {
+      console.error('[API] Error reading instructions file:', error);
+      res.status(500).json({ 
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to read instructions file' 
       });
     }
   });
