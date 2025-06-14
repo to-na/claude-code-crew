@@ -58,7 +58,8 @@ const SessionManager: React.FC = () => {
   const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
-    const newSocket = io('http://localhost:3001');
+    // Use relative URL so it connects to the same host serving the application
+    const newSocket = io();
     setSocket(newSocket);
     socketRef.current = newSocket;
 
