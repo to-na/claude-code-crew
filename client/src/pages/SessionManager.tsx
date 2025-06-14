@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Drawer,
@@ -28,6 +28,9 @@ import TerminalView from '../components/TerminalView';
 import CreateWorktreeDialog from '../components/CreateWorktreeDialog';
 import DeleteWorktreeDialog from '../components/DeleteWorktreeDialog';
 import MergeWorktreeDialog from '../components/MergeWorktreeDialog';
+import NotificationSettings from '../components/NotificationSettings';
+import NotificationPermissionDialog from '../components/NotificationPermissionDialog';
+import { NotificationService } from '../services/notificationService';
 
 const drawerWidth = 300;
 
@@ -39,6 +42,11 @@ const SessionManager: React.FC = () => {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
+  const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
+  const previousStateRef = useRef<Map<string, string>>(new Map());
+  const worktreesRef = useRef<Worktree[]>([]);
+  const hasShownNotificationDialog = useRef(false);
+  const notificationService = NotificationService.getInstance();
 
   useEffect(() => {
     const newSocket = io();
@@ -48,19 +56,46 @@ const SessionManager: React.FC = () => {
       console.log('[Client] Received worktrees:updated event with', updatedWorktrees.length, 'worktrees');
       // Force React to detect the change by creating a new array
       setWorktrees([...updatedWorktrees]);
+      // Update ref for use in event handlers
+      worktreesRef.current = updatedWorktrees;
     });
 
     newSocket.on('session:created', (session: Session) => {
       setActiveSession(session);
+      // Track initial state
+      previousStateRef.current.set(session.id, session.state);
     });
 
     newSocket.on('session:stateChanged', (session: Session) => {
+      console.log('[Client] Received session:stateChanged event:', session);
+      console.log('[Client] Current worktrees:', worktreesRef.current);
+      
       setActiveSession(prevSession => {
         if (prevSession && session.id === prevSession.id) {
           return session;
         }
         return prevSession;
       });
+      
+      // Handle notifications for state changes
+      const worktree = worktreesRef.current.find(w => w.session?.id === session.id);
+      console.log('[Client] Found worktree for session:', worktree);
+      
+      if (worktree) {
+        const previousState = previousStateRef.current.get(session.id);
+        console.log('[Client] Previous state:', previousState, 'New state:', session.state);
+        
+        if (previousState && previousState !== session.state) {
+          notificationService.notifyStateChange(
+            worktree.branch,
+            session.state,
+            previousState
+          );
+        }
+        previousStateRef.current.set(session.id, session.state);
+      } else {
+        console.warn('[Client] No worktree found for session:', session.id);
+      }
     });
 
     newSocket.on('session:destroyed', (sessionId: string) => {
@@ -89,6 +124,19 @@ const SessionManager: React.FC = () => {
       }
     }
   }, [worktrees, selectedWorktree]);
+
+  // 初回アクセス時の通知権限ダイアログ表示
+  useEffect(() => {
+    if (worktrees.length > 0 && !hasShownNotificationDialog.current) {
+      const settings = notificationService.getSettings();
+      if (settings.notificationsEnabled && 
+          'Notification' in window && 
+          Notification.permission === 'default') {
+        setNotificationDialogOpen(true);
+        hasShownNotificationDialog.current = true;
+      }
+    }
+  }, [worktrees]);
 
   const handleSelectWorktree = (worktree: Worktree) => {
     setSelectedWorktree(worktree);
@@ -222,6 +270,9 @@ const SessionManager: React.FC = () => {
             </ListItemButton>
           </ListItem>
         </List>
+        <Box sx={{ flexGrow: 1 }} />
+        <Divider />
+        <NotificationSettings variant="inline" />
       </Drawer>
       <Box
         component="main"
@@ -269,6 +320,10 @@ const SessionManager: React.FC = () => {
         open={mergeDialogOpen}
         onClose={() => setMergeDialogOpen(false)}
         worktrees={worktrees}
+      />
+      <NotificationPermissionDialog
+        open={notificationDialogOpen}
+        onClose={() => setNotificationDialogOpen(false)}
       />
     </Box>
   );
