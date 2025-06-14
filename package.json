@@ -5,7 +5,7 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/to-na/claude-code-crew.git"
+    "url": "https://github.com/kurasupedaichi/claude-code-crew-custom.git"
   },
   "keywords": [
     "claude",
@@ -16,7 +16,7 @@
     "gui",
     "terminal"
   ],
-  "author": "to-na",
+  "author": "kurasupedaichi",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"

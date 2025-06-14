@@ -12,6 +12,7 @@ import {
   Tooltip,
   Typography,
   Box,
+  Divider,
 } from '@mui/material';
 import {
   Notifications,
@@ -19,13 +20,16 @@ import {
   Settings,
 } from '@mui/icons-material';
 import { NotificationService, NotificationSettings as INotificationSettings } from '../services/notificationService';
+import AutoEnterSettings from './AutoEnterSettings';
+import { Worktree } from '../../../shared/types';
 
 interface NotificationSettingsProps {
   variant?: 'dialog' | 'inline';
   onClose?: () => void;
+  worktrees?: Worktree[];
 }
 
-const NotificationSettings: React.FC<NotificationSettingsProps> = ({ variant = 'dialog', onClose }) => {
+const NotificationSettings: React.FC<NotificationSettingsProps> = ({ variant = 'dialog', onClose, worktrees = [] }) => {
   const notificationService = NotificationService.getInstance();
   const [settings, setSettings] = useState<INotificationSettings>(notificationService.getSettings());
   const [open, setOpen] = useState(false);
@@ -54,41 +58,47 @@ const NotificationSettings: React.FC<NotificationSettingsProps> = ({ variant = '
   };
 
   const settingsContent = (
-    <FormGroup>
-      <FormControlLabel
-        control={
-          <Switch
-            checked={settings.notificationsEnabled}
-            onChange={handleSettingChange('notificationsEnabled')}
-            color="primary"
-          />
-        }
-        label={
-          <Box display="flex" alignItems="center" gap={1}>
-            <Notifications />
-            <Typography>通知を有効にする</Typography>
-          </Box>
-        }
-      />
-      <FormControlLabel
-        control={
-          <Switch
-            checked={settings.soundEnabled}
-            onChange={handleSettingChange('soundEnabled')}
-            color="primary"
-          />
-        }
-        label={
-          <Box display="flex" alignItems="center" gap={1}>
-            <VolumeUp />
-            <Typography>音声を有効にする</Typography>
-          </Box>
-        }
-      />
-      <Typography variant="caption" color="text.secondary" sx={{ mt: 2 }}>
-        通知機能でセッションの状態変化（アイドル、ビジー、入力待ち）をお知らせします
-      </Typography>
-    </FormGroup>
+    <>
+      <FormGroup>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={settings.notificationsEnabled}
+              onChange={handleSettingChange('notificationsEnabled')}
+              color="primary"
+            />
+          }
+          label={
+            <Box display="flex" alignItems="center" gap={1}>
+              <Notifications />
+              <Typography>通知を有効にする</Typography>
+            </Box>
+          }
+        />
+        <FormControlLabel
+          control={
+            <Switch
+              checked={settings.soundEnabled}
+              onChange={handleSettingChange('soundEnabled')}
+              color="primary"
+            />
+          }
+          label={
+            <Box display="flex" alignItems="center" gap={1}>
+              <VolumeUp />
+              <Typography>音声を有効にする</Typography>
+            </Box>
+          }
+        />
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 2 }}>
+          通知機能でセッションの状態変化（アイドル、ビジー、入力待ち）をお知らせします
+        </Typography>
+      </FormGroup>
+      
+      <Divider sx={{ my: 3 }} />
+      
+      <AutoEnterSettings worktrees={worktrees} />
+    </>
   );
 
   if (variant === 'inline') {

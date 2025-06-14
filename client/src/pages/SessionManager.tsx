@@ -31,6 +31,7 @@ import MergeWorktreeDialog from '../components/MergeWorktreeDialog';
 import NotificationSettings from '../components/NotificationSettings';
 import NotificationPermissionDialog from '../components/NotificationPermissionDialog';
 import { NotificationService } from '../services/notificationService';
+import { AutoEnterService } from '../services/autoEnterService';
 
 const drawerWidth = 300;
 
@@ -47,6 +48,8 @@ const SessionManager: React.FC = () => {
   const worktreesRef = useRef<Worktree[]>([]);
   const hasShownNotificationDialog = useRef(false);
   const notificationService = NotificationService.getInstance();
+  const autoEnterService = AutoEnterService.getInstance();
+  const autoEnterTimeoutRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   useEffect(() => {
     const newSocket = io();
@@ -58,6 +61,11 @@ const SessionManager: React.FC = () => {
       setWorktrees([...updatedWorktrees]);
       // Update ref for use in event handlers
       worktreesRef.current = updatedWorktrees;
+      
+      // ワークツリーリストが更新されたときに自動Enter設定を初期化
+      updatedWorktrees.forEach(worktree => {
+        autoEnterService.addWorktree(worktree.path);
+      });
     });
 
     newSocket.on('session:created', (session: Session) => {
@@ -86,11 +94,15 @@ const SessionManager: React.FC = () => {
         console.log('[Client] Previous state:', previousState, 'New state:', session.state);
         
         if (previousState && previousState !== session.state) {
+          // 通知機能
           notificationService.notifyStateChange(
             worktree.branch,
             session.state,
             previousState
           );
+          
+          // 自動Enter機能
+          handleAutoEnter(session, worktree, previousState);
         }
         previousStateRef.current.set(session.id, session.state);
       } else {
@@ -108,6 +120,12 @@ const SessionManager: React.FC = () => {
     });
 
     return () => {
+      // クリーンアップ: すべてのタイマーをクリア
+      autoEnterTimeoutRef.current.forEach(timeout => {
+        clearTimeout(timeout);
+      });
+      autoEnterTimeoutRef.current.clear();
+      
       newSocket.close();
     };
   }, []); // Empty dependency array - only run once
@@ -124,6 +142,55 @@ const SessionManager: React.FC = () => {
       }
     }
   }, [worktrees, selectedWorktree]);
+
+  // 自動Enter機能の処理
+  const handleAutoEnter = (session: Session, worktree: Worktree, _previousState: string) => {
+    // waiting_input状態になった場合のみ処理
+    if (session.state !== 'waiting_input') {
+      // waiting_input以外の状態になった場合、pending中のタイマーをキャンセル
+      const existingTimeout = autoEnterTimeoutRef.current.get(session.id);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+        autoEnterTimeoutRef.current.delete(session.id);
+        console.log('[AutoEnter] Cancelled pending auto-enter for session:', session.id);
+      }
+      return;
+    }
+
+    // 自動Enter設定をチェック
+    if (!autoEnterService.shouldAutoEnter(worktree.path)) {
+      console.log('[AutoEnter] Auto-enter disabled for worktree:', worktree.path);
+      return;
+    }
+
+    console.log('[AutoEnter] Scheduling auto-enter for session:', session.id);
+    const delayMs = autoEnterService.getDelayMs();
+    
+    // 既存のタイマーがあればキャンセル
+    const existingTimeout = autoEnterTimeoutRef.current.get(session.id);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+
+    // 遅延後にEnterキーを送信
+    const timeout = setTimeout(() => {
+      if (socket && session.state === 'waiting_input') {
+        console.log('[AutoEnter] Sending auto-enter for session:', session.id);
+        socket.emit('session:input', { 
+          sessionId: session.id, 
+          input: '\r' 
+        });
+        
+        // タイマーをクリーンアップ
+        autoEnterTimeoutRef.current.delete(session.id);
+      } else {
+        console.log('[AutoEnter] Skipped auto-enter - session state changed or socket unavailable');
+      }
+    }, delayMs);
+
+    // タイマーを保存
+    autoEnterTimeoutRef.current.set(session.id, timeout);
+  };
 
   // 初回アクセス時の通知権限ダイアログ表示
   useEffect(() => {
@@ -272,7 +339,7 @@ const SessionManager: React.FC = () => {
         </List>
         <Box sx={{ flexGrow: 1 }} />
         <Divider />
-        <NotificationSettings variant="inline" />
+        <NotificationSettings variant="inline" worktrees={worktrees} />
       </Drawer>
       <Box
         component="main"
