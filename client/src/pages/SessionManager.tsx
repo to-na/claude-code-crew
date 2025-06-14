@@ -55,10 +55,12 @@ const SessionManager: React.FC = () => {
   const notificationService = NotificationService.getInstance();
   const autoEnterService = AutoEnterService.getInstance();
   const autoEnterTimeoutRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const socketRef = useRef<Socket | null>(null);
 
   useEffect(() => {
     const newSocket = io('http://localhost:3001');
     setSocket(newSocket);
+    socketRef.current = newSocket;
 
     newSocket.on('worktrees:updated', (updatedWorktrees: Worktree[]) => {
       // Check if worktrees actually changed to prevent unnecessary updates
@@ -143,6 +145,7 @@ const SessionManager: React.FC = () => {
       autoEnterTimeoutRef.current.clear();
       
       newSocket.close();
+      socketRef.current = null;
     };
   }, []); // Empty dependency array - only run once
 
@@ -210,11 +213,13 @@ const SessionManager: React.FC = () => {
 
     // 3秒後にEnterキーを送信
     const timeout = setTimeout(() => {
-      if (socket) {
+      const currentSocket = socketRef.current;
+      
+      if (currentSocket && currentSocket.connected) {
         console.log('[AutoEnter] ✅ Sending auto-enter (\\r) for session:', session.id);
-        socket.emit('session:input', { 
-          sessionId: session.id, 
-          input: '\r' 
+        currentSocket.emit('session:input', {
+          sessionId: session.id,
+          input: '\r'
         });
         
         // 実行時刻を記録
@@ -223,13 +228,21 @@ const SessionManager: React.FC = () => {
         // タイマーをクリーンアップ
         autoEnterTimeoutRef.current.delete(session.id);
       } else {
-        console.log('[AutoEnter] ❌ Skipped auto-enter - socket unavailable');
+        console.log('[AutoEnter] ❌ Skipped auto-enter - socket unavailable or disconnected');
+        console.log('[AutoEnter] Socket object exists:', !!currentSocket);
+        console.log('[AutoEnter] Socket connected:', currentSocket?.connected);
+        
+        // Socket再接続を試行
+        if (currentSocket && !currentSocket.connected) {
+          console.log('[AutoEnter] Attempting to reconnect socket...');
+          currentSocket.connect();
+        }
       }
     }, delayMs);
 
     // タイマーを保存
     autoEnterTimeoutRef.current.set(session.id, timeout);
-  }, [socket, autoEnterService]);
+  }, [autoEnterService]);
 
   // 初回アクセス時の通知権限ダイアログ表示
   useEffect(() => {

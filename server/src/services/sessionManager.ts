@@ -56,7 +56,9 @@ export class SessionManager extends EventEmitter {
       cleanData.includes('[y/N]') ||
       cleanData.includes('YES') ||
       cleanData.includes('NO') ||
-      cleanData.includes('[Y/n]');
+      cleanData.includes('[Y/n]') ||
+      cleanData.includes('1. Yes') ||
+      cleanData.includes('2. No');
     const wasWaitingWithBottomBorder =
       this.waitingWithBottomBorder.get(sessionId) || false;
     const hasEscToInterrupt = cleanData
