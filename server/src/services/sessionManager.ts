@@ -195,10 +195,13 @@ export class SessionManager extends EventEmitter {
 
       const cleanData = this.stripAnsi(data);
 
+      // Always emit sessionData first, regardless of content
+      if (session.isActive) {
+        this.emit('sessionData', session, data);
+      }
+
+      // Skip further processing for empty content
       if (!cleanData.trim()) {
-        if (session.isActive) {
-          this.emit('sessionData', session, data);
-        }
         return;
       }
 
@@ -212,10 +215,6 @@ export class SessionManager extends EventEmitter {
       if (newState !== oldState) {
         session.state = newState;
         this.emit('sessionStateChanged', session);
-      }
-
-      if (session.isActive) {
-        this.emit('sessionData', session, data);
       }
     });
 
