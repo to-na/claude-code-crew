@@ -3,6 +3,9 @@ import { SessionManager } from '../services/sessionManager.js';
 import { WorktreeService } from '../services/worktreeService.js';
 import { Session, Worktree } from '../../../shared/types.js';
 
+// Track which session each client is currently viewing
+const clientSessions = new Map<string, string>(); // socketId -> sessionId
+
 export function setupWebSocket(io: Server, sessionManager: SessionManager) {
   const worktreeService = new WorktreeService(process.env.WORK_DIR);
 
@@ -29,7 +32,15 @@ export function setupWebSocket(io: Server, sessionManager: SessionManager) {
   });
 
   sessionManager.on('sessionData', (session: Session, data: string) => {
-    io.emit('session:output', { sessionId: session.id, data });
+    // Only send output to clients currently viewing this session
+    for (const [socketId, currentSessionId] of clientSessions.entries()) {
+      if (currentSessionId === session.id) {
+        const socket = io.sockets.sockets.get(socketId);
+        if (socket) {
+          socket.emit('session:output', { sessionId: session.id, data });
+        }
+      }
+    }
   });
 
   sessionManager.on('sessionStateChanged', (session: Session) => {
@@ -48,7 +59,16 @@ export function setupWebSocket(io: Server, sessionManager: SessionManager) {
         .map((buf: Buffer) => buf.toString('utf8'))
         .join('');
       console.log(`Sending restore data for session ${session.id}, history length: ${history.length} characters`);
-      io.emit('session:restore', { sessionId: session.id, history });
+      
+      // Only send restore data to clients currently viewing this session
+      for (const [socketId, currentSessionId] of clientSessions.entries()) {
+        if (currentSessionId === session.id) {
+          const socket = io.sockets.sockets.get(socketId);
+          if (socket) {
+            socket.emit('session:restore', { sessionId: session.id, history });
+          }
+        }
+      }
     } else {
       console.log(`No history available for session ${session.id}`);
     }
@@ -66,6 +86,8 @@ export function setupWebSocket(io: Server, sessionManager: SessionManager) {
       try {
         const session = sessionManager.createSession(worktreePath);
         sessionManager.setSessionActive(worktreePath, true);
+        // Track this client as viewing the created session
+        clientSessions.set(socket.id, session.id);
       } catch (error) {
         console.error('Failed to create session:', error);
         socket.emit('error', { 
@@ -96,14 +118,19 @@ export function setupWebSocket(io: Server, sessionManager: SessionManager) {
     socket.on('session:restore', (sessionId: string) => {
       try {
         const session = sessionManager.getSessionById(sessionId);
-        if (session && session.outputHistory && session.outputHistory.length > 0) {
-          const history = session.outputHistory
-            .map((buf: Buffer) => buf.toString('utf8'))
-            .join('');
-          console.log(`Restoring session ${sessionId} with ${history.length} characters of history`);
-          socket.emit('session:restore', { sessionId: session.id, history });
-        } else {
-          console.log(`No history available for session ${sessionId}`);
+        if (session) {
+          // Track this client as viewing the restored session
+          clientSessions.set(socket.id, session.id);
+          
+          if (session.outputHistory && session.outputHistory.length > 0) {
+            const history = session.outputHistory
+              .map((buf: Buffer) => buf.toString('utf8'))
+              .join('');
+            console.log(`Restoring session ${sessionId} with ${history.length} characters of history`);
+            socket.emit('session:restore', { sessionId: session.id, history });
+          } else {
+            console.log(`No history available for session ${sessionId}`);
+          }
         }
       } catch (error) {
         console.error('Failed to restore session:', error);
@@ -114,15 +141,20 @@ export function setupWebSocket(io: Server, sessionManager: SessionManager) {
     socket.on('session:setActive', (worktreePath: string) => {
       try {
         const sessions = sessionManager.getAllSessions();
+        const targetSession = sessions.find(s => s.worktreePath === worktreePath);
         
-        // Deactivate all sessions first
-        sessions.forEach(session => {
-          sessionManager.setSessionActive(session.worktreePath, false);
-        });
-        
-        // Activate the selected session (this will automatically emit sessionRestore)
-        console.log(`Setting session active for worktree: ${worktreePath}`);
-        sessionManager.setSessionActive(worktreePath, true);
+        if (targetSession) {
+          // Track this client as viewing the target session
+          clientSessions.set(socket.id, targetSession.id);
+          
+          // Check if any client is still viewing other sessions
+          const activeSessionIds = new Set(clientSessions.values());
+          
+          // Activate the target session
+          sessionManager.setSessionActive(worktreePath, true);
+          
+          console.log(`Client ${socket.id} now viewing session for worktree: ${worktreePath}`);
+        }
       } catch (error) {
         console.error('Failed to set session active:', error);
         socket.emit('error', { 
@@ -147,6 +179,11 @@ export function setupWebSocket(io: Server, sessionManager: SessionManager) {
     // Handle disconnect
     socket.on('disconnect', () => {
       console.log('Client disconnected:', socket.id);
+      // Remove client from session tracking
+      clientSessions.delete(socket.id);
+      
+      // Optionally deactivate sessions when no clients are viewing them
+      // This can be implemented later if needed for resource management
     });
   });
 
