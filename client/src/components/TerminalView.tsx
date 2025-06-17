@@ -85,6 +85,8 @@ const TerminalView: React.FC<TerminalViewProps> = ({ session, socket }) => {
     const handleOutput = ({ sessionId, data }: { sessionId: string; data: string }) => {
       if (sessionId === session.id) {
         term.write(data);
+        // Auto-scroll to bottom on new output
+        term.scrollToBottom();
       }
     };
 
@@ -92,6 +94,8 @@ const TerminalView: React.FC<TerminalViewProps> = ({ session, socket }) => {
       if (sessionId === session.id) {
         term.clear();
         term.write(history);
+        // Scroll to bottom after restoring history
+        term.scrollToBottom();
       }
     };
 
@@ -116,6 +120,10 @@ const TerminalView: React.FC<TerminalViewProps> = ({ session, socket }) => {
   useEffect(() => {
     if (fitAddonRef.current) {
       fitAddonRef.current.fit();
+    }
+    // Scroll to bottom when session changes (e.g., when switching worktrees)
+    if (xtermRef.current) {
+      xtermRef.current.scrollToBottom();
     }
   }, [session]);
 
