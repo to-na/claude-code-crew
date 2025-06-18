@@ -1,6 +1,6 @@
 import { spawn, IPty } from 'node-pty-prebuilt-multiarch';
 import { EventEmitter } from 'events';
-import { Session, SessionState, Worktree } from '../../../shared/types.js';
+import { Session, SessionState, SessionType, Worktree } from '../../../shared/types.js';
 
 interface InternalSession extends Session {
   process: IPty;
@@ -11,6 +11,7 @@ interface InternalSession extends Session {
 
 export class SessionManager extends EventEmitter {
   private sessions: Map<string, InternalSession> = new Map();
+  private sessionsByWorktree: Map<string, Map<SessionType, string>> = new Map();
   private waitingWithBottomBorder: Map<string, boolean> = new Map();
   private busyTimers: Map<string, NodeJS.Timeout> = new Map();
 
@@ -119,26 +120,45 @@ export class SessionManager extends EventEmitter {
     return newState;
   }
 
-  createSession(worktreePath: string): Session {
-    const existing = this.sessions.get(worktreePath);
-    if (existing) {
-      return {
-        id: existing.id,
-        worktreePath: existing.worktreePath,
-        state: existing.state,
-        lastActivity: existing.lastActivity,
-      };
+  createSession(worktreePath: string, sessionType: SessionType = 'claude'): Session {
+    // Check if a session of this type already exists for this worktree
+    const worktreeSessions = this.sessionsByWorktree.get(worktreePath);
+    if (worktreeSessions) {
+      const existingSessionId = worktreeSessions.get(sessionType);
+      if (existingSessionId) {
+        const existing = this.sessions.get(existingSessionId);
+        if (existing) {
+          return {
+            id: existing.id,
+            worktreePath: existing.worktreePath,
+            state: existing.state,
+            lastActivity: existing.lastActivity,
+            type: existing.type,
+          };
+        }
+      }
     }
 
     const id = `session-${Date.now()}-${Math.random()
       .toString(36)
       .substr(2, 9)}`;
 
-    const claudeArgs = process.env['CC_CLAUDE_ARGS']
-      ? process.env['CC_CLAUDE_ARGS'].split(' ')
-      : [];
+    let command: string;
+    let args: string[] = [];
 
-    const ptyProcess = spawn('claude', claudeArgs, {
+    if (sessionType === 'terminal') {
+      // Use the user's default shell
+      command = process.env.SHELL || '/bin/sh';
+      args = ['-l']; // Login shell
+    } else {
+      // Claude Code session
+      command = 'claude';
+      args = process.env['CC_CLAUDE_ARGS']
+        ? process.env['CC_CLAUDE_ARGS'].split(' ')
+        : [];
+    }
+
+    const ptyProcess = spawn(command, args, {
       name: 'xterm-color',
       cols: process.stdout.columns || 80,
       rows: process.stdout.rows || 24,
@@ -150,15 +170,23 @@ export class SessionManager extends EventEmitter {
       id,
       worktreePath,
       process: ptyProcess,
-      state: 'busy',
+      state: sessionType === 'terminal' ? 'idle' : 'busy',
       output: [],
       outputHistory: [],
       lastActivity: new Date(),
       isActive: false,
+      type: sessionType,
     };
 
-    this.setupBackgroundHandler(session);
-    this.sessions.set(worktreePath, session);
+    this.setupBackgroundHandler(session, sessionType);
+    this.sessions.set(session.id, session);
+    
+    // Track session by worktree and type
+    if (!this.sessionsByWorktree.has(worktreePath)) {
+      this.sessionsByWorktree.set(worktreePath, new Map());
+    }
+    this.sessionsByWorktree.get(worktreePath)!.set(sessionType, session.id);
+    
     this.emit('sessionCreated', session);
 
     return {
@@ -166,10 +194,11 @@ export class SessionManager extends EventEmitter {
       worktreePath: session.worktreePath,
       state: session.state,
       lastActivity: session.lastActivity,
+      type: session.type,
     };
   }
 
-  private setupBackgroundHandler(session: InternalSession): void {
+  private setupBackgroundHandler(session: InternalSession, sessionType: SessionType = 'claude'): void {
     session.process.onData((data: string) => {
       const buffer = Buffer.from(data, 'utf8');
       session.outputHistory.push(buffer);
@@ -205,50 +234,71 @@ export class SessionManager extends EventEmitter {
         return;
       }
 
-      const oldState = session.state;
-      const newState = this.detectSessionState(
-        cleanData,
-        oldState,
-        session.worktreePath,
-      );
+      // Only detect session state for Claude sessions
+      if (sessionType === 'claude') {
+        const oldState = session.state;
+        const newState = this.detectSessionState(
+          cleanData,
+          oldState,
+          session.worktreePath,
+        );
 
-      if (newState !== oldState) {
-        session.state = newState;
-        this.emit('sessionStateChanged', session);
+        if (newState !== oldState) {
+          session.state = newState;
+          this.emit('sessionStateChanged', session);
+        }
       }
     });
 
     session.process.onExit(() => {
       session.state = 'idle';
       this.emit('sessionStateChanged', session);
-      this.destroySession(session.worktreePath);
+      this.destroySessionById(session.id);
       this.emit('sessionExit', session);
     });
   }
 
-  getSession(worktreePath: string): InternalSession | undefined {
-    return this.sessions.get(worktreePath);
-  }
-
-  getSessionById(sessionId: string): InternalSession | undefined {
-    for (const session of this.sessions.values()) {
-      if (session.id === sessionId) {
-        return session;
+  getSession(worktreePath: string, sessionType?: SessionType): InternalSession | undefined {
+    if (sessionType) {
+      const worktreeSessions = this.sessionsByWorktree.get(worktreePath);
+      if (worktreeSessions) {
+        const sessionId = worktreeSessions.get(sessionType);
+        if (sessionId) {
+          return this.sessions.get(sessionId);
+        }
       }
+      return undefined;
+    }
+    
+    // Legacy: return first session for worktree
+    const worktreeSessions = this.sessionsByWorktree.get(worktreePath);
+    if (worktreeSessions && worktreeSessions.size > 0) {
+      const sessionId = Array.from(worktreeSessions.values())[0];
+      return this.sessions.get(sessionId);
     }
     return undefined;
   }
 
-  setSessionActive(worktreePath: string, active: boolean): void {
-    const session = this.sessions.get(worktreePath);
-    if (session) {
-      session.isActive = active;
+  getSessionById(sessionId: string): InternalSession | undefined {
+    return this.sessions.get(sessionId);
+  }
 
-      if (active && session.outputHistory.length > 0) {
-        console.log(`Restoring session ${session.id} with ${session.outputHistory.length} history items`);
-        this.emit('sessionRestore', session);
-      } else if (active) {
-        console.log(`Session ${session.id} activated but no history to restore`);
+  setSessionActive(worktreePath: string, active: boolean): void {
+    // Set all sessions for this worktree
+    const worktreeSessions = this.sessionsByWorktree.get(worktreePath);
+    if (worktreeSessions) {
+      for (const sessionId of worktreeSessions.values()) {
+        const session = this.sessions.get(sessionId);
+        if (session) {
+          session.isActive = active;
+
+          if (active && session.outputHistory.length > 0) {
+            console.log(`Restoring session ${session.id} with ${session.outputHistory.length} history items`);
+            this.emit('sessionRestore', session);
+          } else if (active) {
+            console.log(`Session ${session.id} activated but no history to restore`);
+          }
+        }
       }
     }
   }
@@ -267,22 +317,42 @@ export class SessionManager extends EventEmitter {
     }
   }
 
-  destroySession(worktreePath: string): void {
-    const session = this.sessions.get(worktreePath);
+  destroySessionById(sessionId: string): void {
+    const session = this.sessions.get(sessionId);
     if (session) {
       try {
         session.process.kill();
       } catch (_error) {
         // Process might already be dead
       }
-      const timer = this.busyTimers.get(worktreePath);
+      const timer = this.busyTimers.get(sessionId);
       if (timer) {
         clearTimeout(timer);
-        this.busyTimers.delete(worktreePath);
+        this.busyTimers.delete(sessionId);
       }
-      this.sessions.delete(worktreePath);
+      
+      // Remove from worktree tracking
+      const worktreeSessions = this.sessionsByWorktree.get(session.worktreePath);
+      if (worktreeSessions) {
+        worktreeSessions.delete(session.type!);
+        if (worktreeSessions.size === 0) {
+          this.sessionsByWorktree.delete(session.worktreePath);
+        }
+      }
+      
+      this.sessions.delete(sessionId);
       this.waitingWithBottomBorder.delete(session.id);
       this.emit('sessionDestroyed', session);
+    }
+  }
+
+  destroySession(worktreePath: string): void {
+    // Destroy all sessions for this worktree
+    const worktreeSessions = this.sessionsByWorktree.get(worktreePath);
+    if (worktreeSessions) {
+      for (const sessionId of worktreeSessions.values()) {
+        this.destroySessionById(sessionId);
+      }
     }
   }
 
@@ -292,12 +362,13 @@ export class SessionManager extends EventEmitter {
       worktreePath: session.worktreePath,
       state: session.state,
       lastActivity: session.lastActivity,
+      type: session.type,
     }));
   }
 
   destroy(): void {
-    for (const worktreePath of this.sessions.keys()) {
-      this.destroySession(worktreePath);
+    for (const sessionId of this.sessions.keys()) {
+      this.destroySessionById(sessionId);
     }
   }
 }

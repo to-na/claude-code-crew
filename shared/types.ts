@@ -1,10 +1,13 @@
 export type SessionState = 'idle' | 'busy' | 'waiting_input';
 
+export type SessionType = 'claude' | 'terminal';
+
 export interface Session {
   id: string;
   worktreePath: string;
   state: SessionState;
   lastActivity: Date;
+  type?: SessionType;
 }
 
 export interface Worktree {
@@ -35,7 +38,7 @@ export interface MergeWorktreeRequest {
 
 export interface SocketEvents {
   // Client to Server
-  'session:create': (worktreePath: string) => void;
+  'session:create': (worktreePath: string, sessionType?: SessionType) => void;
   'session:input': (data: { sessionId: string; input: string }) => void;
   'session:resize': (data: { sessionId: string; cols: number; rows: number }) => void;
   'session:destroy': (sessionId: string) => void;

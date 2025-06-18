@@ -1,7 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { SessionManager } from '../services/sessionManager.js';
 import { WorktreeService } from '../services/worktreeService.js';
-import { Session, Worktree } from '../../../shared/types.js';
+import { Session, SessionType, Worktree } from '../../../shared/types.js';
 
 // Track which session each client is currently viewing
 const clientSessions = new Map<string, string>(); // socketId -> sessionId
@@ -82,9 +82,9 @@ export function setupWebSocket(io: Server, sessionManager: SessionManager) {
     socket.emit('worktrees:updated', getWorktreesWithSessions());
 
     // Handle session creation
-    socket.on('session:create', (worktreePath: string) => {
+    socket.on('session:create', (worktreePath: string, sessionType?: SessionType) => {
       try {
-        const session = sessionManager.createSession(worktreePath);
+        const session = sessionManager.createSession(worktreePath, sessionType);
         sessionManager.setSessionActive(worktreePath, true);
         // Track this client as viewing the created session
         clientSessions.set(socket.id, session.id);
@@ -166,11 +166,7 @@ export function setupWebSocket(io: Server, sessionManager: SessionManager) {
     // Handle session destruction
     socket.on('session:destroy', (sessionId: string) => {
       try {
-        const sessions = sessionManager.getAllSessions();
-        const session = sessions.find(s => s.id === sessionId);
-        if (session) {
-          sessionManager.destroySession(session.worktreePath);
-        }
+        sessionManager.destroySessionById(sessionId);
       } catch (error) {
         console.error('Failed to destroy session:', error);
       }

@@ -21,6 +21,8 @@ import {
   Merge,
   Terminal,
   Circle,
+  Code,
+  Description,
 } from '@mui/icons-material';
 import { io, Socket } from 'socket.io-client';
 import { Worktree, Session } from '../../../shared/types';
@@ -41,12 +43,14 @@ const SessionManager: React.FC = () => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [worktrees, setWorktrees] = useState<Worktree[]>([]);
   const [selectedWorktree, setSelectedWorktree] = useState<Worktree | null>(null);
-  const [activeSession, setActiveSession] = useState<Session | null>(null);
+  const [claudeSession, setClaudeSession] = useState<Session | null>(null);
+  const [terminalSession, setTerminalSession] = useState<Session | null>(null);
+  const [sessions, setSessions] = useState<Map<string, Session>>(new Map());
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [notificationDialogOpen, setNotificationDialogOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabType>('terminal');
+  const [activeTab, setActiveTab] = useState<TabType>('claude');
   const [hasInstructions, setHasInstructions] = useState(false);
   const previousStateRef = useRef<Map<string, string>>(new Map());
   const worktreesRef = useRef<Worktree[]>([]);
@@ -86,7 +90,14 @@ const SessionManager: React.FC = () => {
     });
 
     newSocket.on('session:created', (session: Session) => {
-      setActiveSession(session);
+      setSessions(prev => new Map(prev).set(session.id, session));
+      
+      if (session.type === 'claude') {
+        setClaudeSession(session);
+      } else if (session.type === 'terminal') {
+        setTerminalSession(session);
+      }
+      
       // Track initial state
       previousStateRef.current.set(session.id, session.state);
     });
@@ -95,15 +106,19 @@ const SessionManager: React.FC = () => {
       console.log('[Client] Received session:stateChanged event:', session);
       console.log('[Client] Current worktrees:', worktreesRef.current);
       
-      setActiveSession(prevSession => {
-        if (prevSession && session.id === prevSession.id) {
-          return session;
-        }
-        return prevSession;
-      });
+      setSessions(prev => new Map(prev).set(session.id, session));
+      
+      if (session.type === 'claude') {
+        setClaudeSession(session);
+      } else if (session.type === 'terminal') {
+        setTerminalSession(session);
+      }
       
       // Handle notifications for state changes
-      const worktree = worktreesRef.current.find(w => w.session?.id === session.id);
+      const worktree = worktreesRef.current.find(w => {
+        const sessionsArray = Array.from(sessions.values());
+        return sessionsArray.some(s => s.id === session.id && s.worktreePath === w.path);
+      });
       console.log('[Client] Found worktree for session:', worktree);
       
       if (worktree) {
@@ -130,11 +145,19 @@ const SessionManager: React.FC = () => {
     });
 
     newSocket.on('session:destroyed', (sessionId: string) => {
-      setActiveSession(prevSession => {
-        if (prevSession && sessionId === prevSession.id) {
-          return null;
+      setSessions(prev => {
+        const newSessions = new Map(prev);
+        const session = newSessions.get(sessionId);
+        if (session) {
+          newSessions.delete(sessionId);
+          
+          if (session.type === 'claude') {
+            setClaudeSession(null);
+          } else if (session.type === 'terminal') {
+            setTerminalSession(null);
+          }
         }
-        return prevSession;
+        return newSessions;
       });
     });
 
@@ -154,20 +177,19 @@ const SessionManager: React.FC = () => {
   useEffect(() => {
     if (selectedWorktree && worktrees.length > 0) {
       const updated = worktrees.find(w => w.path === selectedWorktree.path);
-      if (updated && (
-        updated.session?.id !== selectedWorktree.session?.id ||
-        updated.session?.state !== selectedWorktree.session?.state
-      )) {
+      if (updated) {
         setSelectedWorktree(updated);
-        if (updated.session) {
-          setActiveSession(updated.session);
-        }
       }
     }
-  }, [worktrees, selectedWorktree?.path, selectedWorktree?.session?.id, selectedWorktree?.session?.state]);
+  }, [worktrees, selectedWorktree?.path]);
 
   // 自動Enter機能の処理
   const handleAutoEnter = useCallback((session: Session, worktree: Worktree, previousState: string) => {
+    // ターミナルセッションの場合はスキップ
+    if (session.type === 'terminal') {
+      return;
+    }
+
     // waiting_input状態になった場合のみ処理
     if (session.state !== 'waiting_input') {
       // waiting_input以外の状態になった場合、pending中のタイマーをキャンセル
@@ -258,20 +280,42 @@ const SessionManager: React.FC = () => {
     }
   }, [worktrees]);
 
+
   const handleSelectWorktree = useCallback((worktree: Worktree) => {
     setSelectedWorktree(worktree);
-    setActiveTab('terminal'); // Reset to terminal tab when selecting a new worktree
+    setActiveTab('claude'); // Reset to claude tab when selecting a new worktree
     checkInstructionsFile(worktree);
 
-    if (!worktree.session && socket) {
-      // Create a new session for this worktree
-      socket.emit('session:create', worktree.path);
-    } else if (worktree.session && socket) {
-      // Activate existing session on server and client
-      socket.emit('session:setActive', worktree.path);
-      setActiveSession(worktree.session);
+    // Check if sessions exist for this worktree
+    const worktreeSessions = Array.from(sessions.values()).filter(s => s.worktreePath === worktree.path);
+    const claudeExists = worktreeSessions.some(s => s.type === 'claude');
+    const terminalExists = worktreeSessions.some(s => s.type === 'terminal');
+
+    if (!claudeExists && socket) {
+      // Create Claude session if it doesn't exist
+      socket.emit('session:create', worktree.path, 'claude');
+    } else {
+      // Set existing Claude session
+      const claude = worktreeSessions.find(s => s.type === 'claude');
+      if (claude) {
+        setClaudeSession(claude);
+        socket?.emit('session:setActive', worktree.path);
+      }
     }
-  }, [socket]);
+
+    if (!terminalExists) {
+      // Terminal will be created when user switches to terminal tab
+      setTerminalSession(null);
+    } else {
+      // Set existing terminal session
+      const terminal = worktreeSessions.find(s => s.type === 'terminal');
+      if (terminal) {
+        setTerminalSession(terminal);
+        // Request session restore to trigger scroll to bottom
+        socket?.emit('session:restore', terminal.id);
+      }
+    }
+  }, [socket, sessions]);
 
   // Check if instructions file exists for the selected worktree
   const checkInstructionsFile = async (worktree: Worktree) => {
@@ -288,7 +332,12 @@ const SessionManager: React.FC = () => {
 
   const handleTabChange = useCallback((tab: TabType) => {
     setActiveTab(tab);
-  }, []);
+    
+    // Create terminal session if switching to terminal tab and it doesn't exist
+    if (tab === 'terminal' && selectedWorktree && !terminalSession && socket) {
+      socket.emit('session:create', selectedWorktree.path, 'terminal');
+    }
+  }, [selectedWorktree, terminalSession, socket]);
 
   const getStatusColor = useCallback((state?: string) => {
     switch (state) {
@@ -303,21 +352,62 @@ const SessionManager: React.FC = () => {
     }
   }, []);
 
-  const getStatusIcon = useCallback((state?: string) => {
-    const color = getStatusColor(state);
-    const statusText = state ? state.replace('_', ' ') : '';
+  const getWorktreeStatusIcon = useCallback((worktreePath: string) => {
+    const worktreeSessions = Array.from(sessions.values()).filter(s => s.worktreePath === worktreePath);
+    const claudeSession = worktreeSessions.find(s => s.type === 'claude');
+    
+    if (!claudeSession) return <FolderOpen />;
+    
+    const color = getStatusColor(claudeSession.state);
+    const statusText = claudeSession.state ? claudeSession.state.replace('_', ' ') : '';
 
     return (
-      <Tooltip title={statusText}>
-        <Circle
-          sx={{
-            fontSize: 20,
-            color: `${color}.main`,
-          }}
-        />
+      <Tooltip title={`Claude Code - ${statusText}`}>
+        <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+          <Code />
+          <Circle
+            sx={{
+              position: 'absolute',
+              bottom: -4,
+              right: -4,
+              fontSize: 12,
+              color: `${color}.main`,
+            }}
+          />
+        </Box>
       </Tooltip>
     );
-  }, [getStatusColor]);
+  }, [getStatusColor, sessions]);
+
+  // キーボードショートカットの設定
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Ctrl+1: Claude Code tab
+      if (event.ctrlKey && event.key === '1') {
+        event.preventDefault();
+        if (selectedWorktree) {
+          setActiveTab('claude');
+        }
+      }
+      // Ctrl+2: Terminal tab
+      else if (event.ctrlKey && event.key === '2') {
+        event.preventDefault();
+        if (selectedWorktree) {
+          handleTabChange('terminal');
+        }
+      }
+      // Ctrl+3: Instructions tab (if available)
+      else if (event.ctrlKey && event.key === '3') {
+        event.preventDefault();
+        if (selectedWorktree && hasInstructions) {
+          setActiveTab('instructions');
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedWorktree, hasInstructions, handleTabChange]);
 
   return (
     <Box sx={{ display: 'flex', height: '100%' }}>
@@ -329,14 +419,31 @@ const SessionManager: React.FC = () => {
         }}
       >
         <Toolbar>
-          <Terminal sx={{ mr: 2 }} />
+          {activeTab === 'terminal' ? (
+            <Terminal sx={{ mr: 2 }} />
+          ) : activeTab === 'claude' ? (
+            <Code sx={{ mr: 2 }} />
+          ) : (
+            <Description sx={{ mr: 2 }} />
+          )}
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            {selectedWorktree ? selectedWorktree.branch : 'Claude Code Crew'}
+            {selectedWorktree ? (
+              <>
+                {selectedWorktree.branch}
+                {activeTab !== 'instructions' && (
+                  <Typography variant="caption" sx={{ ml: 1, opacity: 0.7 }}>
+                    ({activeTab === 'terminal' ? 'Terminal' : 'Claude Code'})
+                  </Typography>
+                )}
+              </>
+            ) : (
+              'Claude Code Crew'
+            )}
           </Typography>
-          {activeSession && (
+          {((activeTab === 'claude' && claudeSession) || (activeTab === 'terminal' && terminalSession)) && (
             <Chip
-              label={activeSession.state.replace('_', ' ')}
-              color={getStatusColor(activeSession.state)}
+              label={(activeTab === 'claude' ? claudeSession : terminalSession)?.state.replace('_', ' ')}
+              color={getStatusColor((activeTab === 'claude' ? claudeSession : terminalSession)?.state)}
               size="small"
             />
           )}
@@ -368,11 +475,7 @@ const SessionManager: React.FC = () => {
                 onClick={() => handleSelectWorktree(worktree)}
               >
                 <ListItemIcon>
-                  {worktree.session ? (
-                    getStatusIcon(worktree.session.state)
-                  ) : (
-                    <FolderOpen />
-                  )}
+                  {getWorktreeStatusIcon(worktree.path)}
                 </ListItemIcon>
                 <ListItemText
                   primary={worktree.branch}
@@ -432,10 +535,10 @@ const SessionManager: React.FC = () => {
               onTabChange={handleTabChange}
               hasInstructions={hasInstructions}
             />
-            {activeTab === 'terminal' ? (
-              activeSession && socket ? (
+            {activeTab === 'claude' ? (
+              claudeSession && socket ? (
                 <TerminalView
-                  session={activeSession}
+                  session={claudeSession}
                   socket={socket}
                 />
               ) : (
@@ -449,6 +552,26 @@ const SessionManager: React.FC = () => {
                 >
                   <Typography variant="h6" color="textSecondary">
                     Starting Claude Code session...
+                  </Typography>
+                </Box>
+              )
+            ) : activeTab === 'terminal' ? (
+              terminalSession && socket ? (
+                <TerminalView
+                  session={terminalSession}
+                  socket={socket}
+                />
+              ) : (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '100%',
+                  }}
+                >
+                  <Typography variant="h6" color="textSecondary">
+                    Starting Terminal session...
                   </Typography>
                 </Box>
               )
