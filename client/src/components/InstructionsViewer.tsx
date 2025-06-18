@@ -196,12 +196,12 @@ const InstructionsViewer: React.FC<InstructionsViewerProps> = ({
   if (!instructions.success) {
     return (
       <Box sx={{ p: 3 }}>
-        <Alert severity="warning" icon={<Description />}>
+        <Alert severity="info" icon={<Description />}>
           <Typography variant="body1">
-            Instructions file not found: {instructions.filename}
+            No instructions file found for this worktree
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            Expected file: {worktreeName.replace(/\//g, '_')}_instructions.md
+            To add instructions, create a file named: {worktreeName.replace(/\//g, '_')}_instructions.md
           </Typography>
         </Alert>
       </Box>

@@ -60,6 +60,7 @@ const SessionManager: React.FC = () => {
   const autoEnterService = AutoEnterService.getInstance();
   const autoEnterTimeoutRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
   const socketRef = useRef<Socket | null>(null);
+  const hasRestoredSession = useRef(false);
 
   useEffect(() => {
     // Use relative URL so it connects to the same host serving the application
@@ -87,9 +88,55 @@ const SessionManager: React.FC = () => {
           autoEnterService.addWorktree(worktree.path);
         });
       }
+      
+      // Extract sessions from worktrees and update session state
+      const newSessions = new Map<string, Session>();
+      updatedWorktrees.forEach(worktree => {
+        if (worktree.session) {
+          newSessions.set(worktree.session.id, worktree.session);
+        }
+      });
+      
+      if (newSessions.size > 0) {
+        console.log('[Client] Found', newSessions.size, 'existing sessions from worktrees');
+        setSessions(prev => {
+          // Merge with existing sessions to preserve all session types
+          const merged = new Map(prev);
+          newSessions.forEach((session, id) => {
+            merged.set(id, session);
+          });
+          return merged;
+        });
+      }
+    });
+
+    newSocket.on('sessions:list', (sessionsList: Session[]) => {
+      console.log('[SessionManager] Received sessions:list event with', sessionsList.length, 'sessions');
+      const newSessions = new Map<string, Session>();
+      sessionsList.forEach(session => {
+        newSessions.set(session.id, session);
+      });
+      setSessions(newSessions);
+      
+      // Update terminal and claude sessions for the selected worktree
+      if (selectedWorktree) {
+        const worktreeSessions = sessionsList.filter(s => s.worktreePath === selectedWorktree.path);
+        const claude = worktreeSessions.find(s => s.type === 'claude');
+        const terminal = worktreeSessions.find(s => s.type === 'terminal');
+        
+        if (claude) setClaudeSession(claude);
+        if (terminal) setTerminalSession(terminal);
+      }
     });
 
     newSocket.on('session:created', (session: Session) => {
+      console.log('[SessionManager] Received session:created event:', {
+        id: session.id,
+        type: session.type,
+        worktreePath: session.worktreePath,
+        state: session.state
+      });
+      
       setSessions(prev => new Map(prev).set(session.id, session));
       
       if (session.type === 'claude') {
@@ -100,6 +147,12 @@ const SessionManager: React.FC = () => {
       
       // Track initial state
       previousStateRef.current.set(session.id, session.state);
+      
+      // Request restore if this is a claude session and we have history
+      if (session.type === 'claude') {
+        console.log('[SessionManager] Requesting restore for claude session:', session.id);
+        newSocket.emit('session:restore', session.id);
+      }
     });
 
     newSocket.on('session:stateChanged', (session: Session) => {
@@ -173,15 +226,88 @@ const SessionManager: React.FC = () => {
     };
   }, []); // Empty dependency array - only run once
 
-  // Separate effect to update worktree when worktrees change
+  // Separate effect to update worktree and sessions when worktrees change
   useEffect(() => {
     if (selectedWorktree && worktrees.length > 0) {
       const updated = worktrees.find(w => w.path === selectedWorktree.path);
       if (updated) {
         setSelectedWorktree(updated);
+        
+        // Update terminal and claude sessions for the selected worktree
+        const worktreeSessions = Array.from(sessions.values()).filter(s => s.worktreePath === updated.path);
+        const claude = worktreeSessions.find(s => s.type === 'claude');
+        const terminal = worktreeSessions.find(s => s.type === 'terminal');
+        
+        if (claude) setClaudeSession(claude);
+        if (terminal) setTerminalSession(terminal);
       }
     }
-  }, [worktrees, selectedWorktree?.path]);
+  }, [worktrees, selectedWorktree?.path, sessions]);
+  
+  // Auto-restore session from localStorage when worktrees are loaded
+  useEffect(() => {
+    if (!hasRestoredSession.current && worktrees.length > 0 && socket) {
+      const savedWorktreePath = localStorage.getItem('selectedWorktreePath');
+      if (savedWorktreePath) {
+        const savedWorktree = worktrees.find(w => w.path === savedWorktreePath);
+        if (savedWorktree) {
+          console.log('[Client] Auto-restoring session for worktree:', savedWorktreePath);
+          hasRestoredSession.current = true;
+          
+          // Directly set the selected worktree
+          setSelectedWorktree(savedWorktree);
+          
+          // Restore saved active tab or default to 'claude'
+          const savedTab = localStorage.getItem(`activeTab_${savedWorktree.path}`) as TabType;
+          const restoredTab = savedTab || 'claude';
+          setActiveTab(restoredTab);
+          console.log('[Client] Restoring active tab:', restoredTab);
+          
+          // Check if sessions exist for this worktree
+          const worktreeSessions = Array.from(sessions.values()).filter(s => s.worktreePath === savedWorktree.path);
+          const claudeExists = worktreeSessions.some(s => s.type === 'claude');
+          const terminalExists = worktreeSessions.some(s => s.type === 'terminal');
+
+          // Create Claude session if it doesn't exist
+          if (!claudeExists && socket) {
+            socket.emit('session:create', savedWorktree.path, 'claude');
+          } else {
+            // Set existing Claude session
+            const claude = worktreeSessions.find(s => s.type === 'claude');
+            if (claude) {
+              setClaudeSession(claude);
+            }
+          }
+
+          // Create or set terminal session
+          if (!terminalExists && socket) {
+            socket.emit('session:create', savedWorktree.path, 'terminal');
+          } else {
+            const terminal = worktreeSessions.find(s => s.type === 'terminal');
+            if (terminal) {
+              setTerminalSession(terminal);
+            }
+          }
+          
+          // Notify server about the active tab
+          if (restoredTab === 'terminal' && terminalExists) {
+            socket.emit('session:switchTab', { 
+              worktreePath: savedWorktree.path, 
+              sessionType: 'terminal' 
+            });
+          } else if (restoredTab === 'claude' && claudeExists) {
+            socket.emit('session:switchTab', { 
+              worktreePath: savedWorktree.path, 
+              sessionType: 'claude' 
+            });
+          }
+          
+          // Check instructions file
+          checkInstructionsFile(savedWorktree);
+        }
+      }
+    }
+  }, [worktrees, socket, sessions]);
 
   // 自動Enter機能の処理
   const handleAutoEnter = useCallback((session: Session, worktree: Worktree, previousState: string) => {
@@ -285,11 +411,13 @@ const SessionManager: React.FC = () => {
     setSelectedWorktree(worktree);
     setActiveTab('claude'); // Reset to claude tab when selecting a new worktree
     checkInstructionsFile(worktree);
+    
+    // Save selected worktree path to localStorage
+    localStorage.setItem('selectedWorktreePath', worktree.path);
 
     // Check if sessions exist for this worktree
     const worktreeSessions = Array.from(sessions.values()).filter(s => s.worktreePath === worktree.path);
     const claudeExists = worktreeSessions.some(s => s.type === 'claude');
-    const terminalExists = worktreeSessions.some(s => s.type === 'terminal');
 
     if (!claudeExists && socket) {
       // Create Claude session if it doesn't exist
@@ -303,17 +431,13 @@ const SessionManager: React.FC = () => {
       }
     }
 
-    if (!terminalExists) {
-      // Terminal will be created when user switches to terminal tab
-      setTerminalSession(null);
-    } else {
-      // Set existing terminal session
-      const terminal = worktreeSessions.find(s => s.type === 'terminal');
-      if (terminal) {
-        setTerminalSession(terminal);
-        // Request session restore to trigger scroll to bottom
-        socket?.emit('session:restore', terminal.id);
-      }
+    // Always set terminal session state based on existing sessions
+    const terminal = worktreeSessions.find(s => s.type === 'terminal');
+    setTerminalSession(terminal || null);
+    
+    if (terminal) {
+      // Request session restore to trigger scroll to bottom
+      socket?.emit('session:restore', terminal.id);
     }
   }, [socket, sessions]);
 
@@ -331,13 +455,50 @@ const SessionManager: React.FC = () => {
   };
 
   const handleTabChange = useCallback((tab: TabType) => {
+    console.log('[SessionManager] handleTabChange:', tab, {
+      selectedWorktree: selectedWorktree?.path,
+      terminalSession: terminalSession?.id,
+      socket: !!socket,
+      socketConnected: socket?.connected
+    });
+    
     setActiveTab(tab);
     
-    // Create terminal session if switching to terminal tab and it doesn't exist
-    if (tab === 'terminal' && selectedWorktree && !terminalSession && socket) {
-      socket.emit('session:create', selectedWorktree.path, 'terminal');
+    // Handle tab switching based on tab type
+    if (selectedWorktree && socket && socket.connected) {
+      if (tab === 'terminal') {
+        // Create terminal session if it doesn't exist
+        if (!terminalSession) {
+          console.log('[SessionManager] Creating terminal session for:', selectedWorktree.path);
+          socket.emit('session:create', selectedWorktree.path, 'terminal');
+        } else {
+          // Switch to existing terminal session
+          console.log('[SessionManager] Switching to terminal session:', terminalSession.id);
+          socket.emit('session:switchTab', { 
+            worktreePath: selectedWorktree.path, 
+            sessionType: 'terminal' 
+          });
+        }
+      } else if (tab === 'claude') {
+        // Switch to claude session
+        const claudeSession = Array.from(sessions.values()).find(
+          s => s.worktreePath === selectedWorktree.path && s.type === 'claude'
+        );
+        if (claudeSession) {
+          console.log('[SessionManager] Switching to claude session:', claudeSession.id);
+          socket.emit('session:switchTab', { 
+            worktreePath: selectedWorktree.path, 
+            sessionType: 'claude' 
+          });
+        }
+      }
     }
-  }, [selectedWorktree, terminalSession, socket]);
+    
+    // Save active tab to localStorage
+    if (selectedWorktree) {
+      localStorage.setItem(`activeTab_${selectedWorktree.path}`, tab);
+    }
+  }, [selectedWorktree, terminalSession, socket, sessions]);
 
   const getStatusColor = useCallback((state?: string) => {
     switch (state) {

@@ -103,7 +103,12 @@ const TerminalView: React.FC<TerminalViewProps> = ({ session, socket }) => {
     socket.on('session:restore', handleRestore);
 
     // Request session restore if reconnecting
-    socket.emit('session:restore', session.id);
+    // Send both sessionId and worktreePath/type for better session recovery
+    socket.emit('session:restore', {
+      sessionId: session.id,
+      worktreePath: session.worktreePath,
+      sessionType: session.type
+    });
 
     // Cleanup
     return () => {
@@ -124,6 +129,8 @@ const TerminalView: React.FC<TerminalViewProps> = ({ session, socket }) => {
     // Scroll to bottom when session changes (e.g., when switching worktrees)
     if (xtermRef.current) {
       xtermRef.current.scrollToBottom();
+      // Focus the terminal when the tab becomes active
+      xtermRef.current.focus();
     }
   }, [session]);
 

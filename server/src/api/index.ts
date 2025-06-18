@@ -196,9 +196,9 @@ export function setupApiRoutes(app: Express, io: Server, sessionManager: Session
         });
       } catch (fileError) {
         if ((fileError as NodeJS.ErrnoException).code === 'ENOENT') {
+          // File not found is expected - just return false without error
           res.json({ 
-            success: false, 
-            error: 'Instructions file not found',
+            success: false,
             filename: instructionsFileName
           });
         } else {

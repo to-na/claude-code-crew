@@ -127,14 +127,24 @@ export class SessionManager extends EventEmitter {
       const existingSessionId = worktreeSessions.get(sessionType);
       if (existingSessionId) {
         const existing = this.sessions.get(existingSessionId);
-        if (existing) {
-          return {
-            id: existing.id,
-            worktreePath: existing.worktreePath,
-            state: existing.state,
-            lastActivity: existing.lastActivity,
-            type: existing.type,
-          };
+        if (existing && existing.process) {
+          try {
+            // Check if process is still alive by trying to write an empty string
+            existing.process.write('');
+            // Return existing active session
+            console.log(`Reusing existing ${sessionType} session ${existing.id} for worktree ${worktreePath}`);
+            return {
+              id: existing.id,
+              worktreePath: existing.worktreePath,
+              state: existing.state,
+              lastActivity: existing.lastActivity,
+              type: existing.type,
+            };
+          } catch (error) {
+            // Process is dead, clean it up
+            console.log(`Cleaning up dead ${sessionType} session ${existing.id} for worktree ${worktreePath}`);
+            this.destroySessionById(existingSessionId);
+          }
         }
       }
     }

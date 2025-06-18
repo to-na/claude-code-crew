@@ -80,6 +80,10 @@ export function setupWebSocket(io: Server, sessionManager: SessionManager) {
 
     // Send initial data
     socket.emit('worktrees:updated', getWorktreesWithSessions());
+    
+    // Send all existing sessions
+    const allSessions = sessionManager.getAllSessions();
+    socket.emit('sessions:list', allSessions);
 
     // Handle session creation
     socket.on('session:create', (worktreePath: string, sessionType?: SessionType) => {
@@ -115,9 +119,22 @@ export function setupWebSocket(io: Server, sessionManager: SessionManager) {
     });
 
     // Handle client-requested session restore
-    socket.on('session:restore', (sessionId: string) => {
+    socket.on('session:restore', (data: string | { sessionId?: string; worktreePath?: string; sessionType?: SessionType }) => {
       try {
-        const session = sessionManager.getSessionById(sessionId);
+        let session: any;
+        
+        // Support both legacy (sessionId only) and new format
+        if (typeof data === 'string') {
+          // Legacy format: just sessionId
+          session = sessionManager.getSessionById(data);
+        } else if (data.sessionId) {
+          // Try to find by sessionId first
+          session = sessionManager.getSessionById(data.sessionId);
+        } else if (data.worktreePath && data.sessionType) {
+          // Find by worktreePath and sessionType
+          session = sessionManager.getSession(data.worktreePath, data.sessionType);
+        }
+        
         if (session) {
           // Track this client as viewing the restored session
           clientSessions.set(socket.id, session.id);
@@ -126,11 +143,13 @@ export function setupWebSocket(io: Server, sessionManager: SessionManager) {
             const history = session.outputHistory
               .map((buf: Buffer) => buf.toString('utf8'))
               .join('');
-            console.log(`Restoring session ${sessionId} with ${history.length} characters of history`);
+            console.log(`Restoring session ${session.id} with ${history.length} characters of history`);
             socket.emit('session:restore', { sessionId: session.id, history });
           } else {
-            console.log(`No history available for session ${sessionId}`);
+            console.log(`No history available for session ${session.id}`);
           }
+        } else {
+          console.log(`Session not found for restore request:`, data);
         }
       } catch (error) {
         console.error('Failed to restore session:', error);
@@ -159,6 +178,31 @@ export function setupWebSocket(io: Server, sessionManager: SessionManager) {
         console.error('Failed to set session active:', error);
         socket.emit('error', { 
           message: error instanceof Error ? error.message : 'Failed to activate session' 
+        });
+      }
+    });
+
+    // Handle tab switching to update client tracking
+    socket.on('session:switchTab', ({ worktreePath, sessionType }: { worktreePath: string, sessionType: SessionType }) => {
+      try {
+        const session = sessionManager.getSession(worktreePath, sessionType);
+        
+        if (session) {
+          // Update client tracking to the new session
+          clientSessions.set(socket.id, session.id);
+          console.log(`Client ${socket.id} switched to ${sessionType} session for worktree: ${worktreePath}`);
+          
+          // Send acknowledgment with session info
+          socket.emit('session:switchTab:ack', { 
+            sessionId: session.id, 
+            sessionType: session.type,
+            worktreePath: session.worktreePath 
+          });
+        }
+      } catch (error) {
+        console.error('Failed to switch tab:', error);
+        socket.emit('error', {
+          message: error instanceof Error ? error.message : 'Failed to switch tab'
         });
       }
     });
